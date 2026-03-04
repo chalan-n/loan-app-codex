@@ -1855,28 +1855,28 @@
       // Calculate on load
       calculateAge();
 
-      flatpickr(".datepicker-th", {
-        locale: "th",
-        dateFormat: "Y-m-d", // Store as YYYY-MM-DD (CE)
-        allowInput: false,   // Prevent keyboard
-        altInput: true,      // Show user-friendly format
-        altFormat: "d-m-Y",  // Display as DD-MM-YYYY
-        onChange: function (selectedDates, dateStr, instance) {
-          if (instance.element.id === 'date_of_birth') {
-            // Update the actual input value first
+      // flatpickr ".datepicker-th" จะ init โดย thai_datepicker.js (ไม่ init ซ้ำที่นี่)
+      // hook onChange สำหรับ calculateAge หลัง thai_datepicker.js init เสร็จ
+      setTimeout(function() {
+        const dobEl = document.getElementById('date_of_birth');
+        if (dobEl && dobEl._flatpickr) {
+          const fp = dobEl._flatpickr;
+          const origOnChange = fp.config.onChange || [];
+          fp.config.onChange = Array.isArray(origOnChange) ? origOnChange : [origOnChange];
+          fp.config.onChange.push(function(selectedDates, dateStr, instance) {
             instance.element.value = dateStr;
             calculateAge();
-          }
+          });
         }
-      });
+      }, 200);
 
       flatpickr(".datepicker-past", {
         locale: "th",
-        dateFormat: "Y-m-d", // Store as YYYY-MM-DD (CE)
-        allowInput: false,   // Prevent keyboard
-        altInput: true,      // Show user-friendly format
-        altFormat: "d-m-Y",  // Display as DD-MM-YYYY
-        maxDate: "today"     // Restrict to past dates
+        dateFormat: "Y-m-d",
+        allowInput: false,
+        altInput: true,
+        altFormat: "d-m-Y",
+        maxDate: "today"
       });
 
       // Populate Ethnicity (Race)
@@ -2469,14 +2469,11 @@
         const p2 = parseInt(parts[2], 10);
 
         if (parts[0].length === 4) {
-          // YYYY/MM/DD หรือ YYYY-MM-DD
-          yyyy = p0; mm = p1; dd = p2;
+          yyyy = p0; mm = p1; dd = p2;           // YYYY-MM-DD
         } else if (parts[2].length === 4) {
-          // DD/MM/YYYY หรือ DD-MM-YYYY
-          dd = p0; mm = p1; yyyy = p2;
+          dd = p0; mm = p1; yyyy = p2;            // DD/MM/YYYY
         } else {
-          // fallback: สมมุติ DD/MM/YYYY
-          dd = p0; mm = p1; yyyy = p2;
+          dd = p0; mm = p1; yyyy = p2;            // fallback DD/MM/YY
         }
       } else {
         console.warn('[setFlatpickrDate] cannot parse:', dateStr);
@@ -2488,10 +2485,7 @@
         return;
       }
 
-      // mm ใน Date() เริ่มจาก 0
       const monthIndex = mm - 1;
-
-      // ถ้าปีเกิน 2400 ถือว่าเป็น พ.ศ. → แปลงกลับเป็น ค.ศ.
       const ceYear = yyyy > 2400 ? yyyy - 543 : yyyy;
       const jsDate = new Date(ceYear, monthIndex, dd);
       if (isNaN(jsDate.getTime())) {
@@ -2501,58 +2495,42 @@
 
       const padded = (n) => String(n).padStart(2, '0');
       const beYear = ceYear + 543;
-      const ceStr = `${ceYear}-${padded(mm)}-${padded(dd)}`;        // YYYY-MM-DD ค.ศ. สำหรับ hidden input
-      const beDisplayStr = `${padded(dd)}-${padded(mm)}-${beYear}`; // DD-MM-YYYY พ.ศ. สำหรับ altInput
+      const ceStr = `${ceYear}-${padded(mm)}-${padded(dd)}`;
+      const beDisplayStr = `${padded(dd)}-${padded(mm)}-${beYear}`;
 
-      console.log('[setFlatpickrDate] parsed → CE:', ceStr, 'BE display:', beDisplayStr,
-                  'has _flatpickr:', !!el._flatpickr);
+      console.log('[setFlatpickrDate] CE:', ceStr, 'BE:', beDisplayStr, '_flatpickr:', !!el._flatpickr);
 
-      // วิธีที่ 1: ผ่าน flatpickr instance (ถ้ามี)
+      // ── 1) ตั้งค่า hidden input (CE) สำหรับ form submission ──────────
+      el.value = ceStr;
+
+      // ── 2) หา altInput ที่ user เห็น ────────────────────────────────
+      let fpAlt = null;
+      if (el._flatpickr && el._flatpickr.altInput) {
+        fpAlt = el._flatpickr.altInput;
+      }
+
+      // ── 3) ลอง setDate เพื่อ sync internal state (optional) ─────────
       if (el._flatpickr) {
         try {
-          el._flatpickr.setDate(jsDate, true);
-          // Force altInput ให้แสดงปี พ.ศ. เสมอ
-          const fpAlt = el._flatpickr.altInput;
-          if (fpAlt) {
-            fpAlt.removeAttribute('readonly');
-            fpAlt.value = beDisplayStr;
-            fpAlt.setAttribute('readonly', 'readonly');
-          }
-          console.log('[setFlatpickrDate] ✅ set via _flatpickr OK, altInput:', fpAlt?.value);
-          // Trigger calculateAge สำหรับ date_of_birth
-          if (selector === '#date_of_birth') setTimeout(() => calculateAge(), 50);
-          return;
+          el._flatpickr.setDate(jsDate, false);
+          console.log('[setFlatpickrDate] setDate OK');
         } catch (e) {
-          console.warn('[setFlatpickrDate] _flatpickr.setDate failed:', e.message);
+          console.warn('[setFlatpickrDate] setDate failed (ignored):', e.message);
         }
       }
 
-      // วิธีที่ 2: ตั้งค่า hidden input (CE) และ altInput (BE) โดยตรง
-      console.log('[setFlatpickrDate] fallback → direct DOM');
-      el.removeAttribute('readonly');
-      el.value = ceStr;
-      el.setAttribute('readonly', 'readonly');
-
-      // หา altInput ที่ flatpickr สร้างให้
-      const altInput = el.nextElementSibling && el.nextElementSibling.classList.contains('flatpickr-input')
-        ? el.nextElementSibling
-        : el.parentElement ? el.parentElement.querySelector('input.flatpickr-input')
-          : null;
-
-      if (altInput) {
-        altInput.removeAttribute('readonly');
-        altInput.value = beDisplayStr;
-        altInput.setAttribute('readonly', 'readonly');
-        console.log('[setFlatpickrDate] fallback altInput set to:', beDisplayStr);
+      // ── 4) Force altInput แสดงปี พ.ศ. (ทำหลัง setDate เผื่อมันทับค่า)
+      if (fpAlt) {
+        fpAlt.value = beDisplayStr;
+        console.log('[setFlatpickrDate] ✅ altInput set to:', beDisplayStr);
       } else {
-        console.warn('[setFlatpickrDate] no altInput found for:', selector);
+        console.warn('[setFlatpickrDate] ⚠️ no altInput ref, el.value set to:', ceStr);
       }
 
-      // Trigger calculateAge สำหรับ date_of_birth
-      setTimeout(() => {
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        if (selector === '#date_of_birth') calculateAge();
-      }, 50);
+      // ── 5) คำนวณอายุ ─────────────────────────────────────────────────
+      if (selector === '#date_of_birth') {
+        setTimeout(() => calculateAge(), 50);
+      }
     }
 
     /**
