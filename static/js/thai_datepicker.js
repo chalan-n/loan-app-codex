@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", function () {
     flatpickr(".datepicker-th", {
         locale: "th",
         dateFormat: "Y-m-d", // Store as YYYY-MM-DD (CE)
+        disableMobile: true, // Always use flatpickr UI, never native mobile picker
         allowInput: false,
         altInput: true,      // Show user-friendly format
         altFormat: "d-m-Y",   // Display as DD-MM-YYYY (converted to BE by formatDate)
