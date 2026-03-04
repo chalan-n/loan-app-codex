@@ -759,6 +759,171 @@
         width: 100%;
       }
     }
+
+    /* ========== ID Card OCR Card ========== */
+    .idcard-ocr-card {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 55%, #047857 100%);
+      border-radius: 20px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(6, 78, 59, 0.28);
+    }
+
+    .idcard-ocr-card::before {
+      content: '';
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .idcard-ocr-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40px;
+      left: 35%;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .idcard-ocr-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .idcard-ocr-icon i {
+      font-size: 2.2rem;
+      color: #6ee7b7;
+    }
+
+    .idcard-ocr-text {
+      flex: 1;
+      z-index: 1;
+    }
+
+    .idcard-ocr-text h3 {
+      color: white;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .idcard-ocr-text p {
+      color: #a7f3d0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .idcard-ocr-badge {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .idcard-ocr-badge.show {
+      display: inline-flex;
+    }
+
+    .idcard-ocr-badge.warn {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .btn-scan-id {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 28px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+      z-index: 1;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.45);
+      transition: all 0.3s ease;
+    }
+
+    .btn-scan-id:hover {
+      transform: translateY(-3px) scale(1.04);
+      box-shadow: 0 8px 28px rgba(16, 185, 129, 0.6);
+    }
+
+    .btn-scan-id i {
+      font-size: 1.3rem;
+    }
+
+    /* reuse overlay from step2 pattern */
+    #idcardOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 9000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #idcardOverlay.show {
+      display: flex;
+    }
+
+    .idcard-spinner {
+      width: 64px;
+      height: 64px;
+      border: 5px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #34d399;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    #idcardOverlayMsg {
+      color: white;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .idcard-ocr-card {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .btn-scan-id {
+        width: 100%;
+        justify-content: center;
+      }
+    }
   </style>
 </head>
 
@@ -859,6 +1024,30 @@
     <!-- Form Body -->
     <div class="form-body">
       <form action="/step1" method="POST" id="step1Form" novalidate>
+
+        <!-- ===== ID Card OCR Scan Card ===== -->
+        <div class="idcard-ocr-card">
+          <div class="idcard-ocr-icon"><i class="fas fa-id-card"></i></div>
+          <div class="idcard-ocr-text">
+            <h3>📷 สแกนบัตรประชาชนด้วย AI</h3>
+            <p>ถ่ายรูปหน้าบัตรประชาชน — ระบบจะกรอกชื่อ, เลขบัตร, วันเกิด และที่อยู่ให้อัตโนมัติ</p>
+            <div class="idcard-ocr-badge" id="idcardBadge">
+              <i class="fas fa-check-circle"></i>
+              <span id="idcardBadgeText">สแกนสำเร็จ</span>
+            </div>
+          </div>
+          <input type="file" id="idcardFileInput" accept="image/*" capture="environment" style="display:none;"
+            onchange="handleIdCardFile(this)">
+          <button type="button" class="btn-scan-id" onclick="document.getElementById('idcardFileInput').click()">
+            <i class="fas fa-camera"></i> ถ่ายรูป / อัปโหลด
+          </button>
+        </div>
+
+        <!-- ID Card Loading Overlay -->
+        <div id="idcardOverlay">
+          <div class="idcard-spinner"></div>
+          <div id="idcardOverlayMsg">🤖 กำลังสแกนบัตรด้วย AI...</div>
+        </div>
 
         <!-- Section: ประเภทผู้เช่าซื้อ -->
         <div class="section">
@@ -2150,6 +2339,214 @@
     });
   </script>
   <script src="/static/js/thai_datepicker.js"></script>
+
+  <!-- ===================================================
+       OCR บัตรประชาชน — Auto-fill ผู้เช่าซื้อ Step 1
+       =================================================== -->
+  <script>
+    /**
+     * handleIdCardFile — ถ่ายรูป/เลือกไฟล์บัตรประชาชน แล้วส่ง Gemini OCR
+     */
+    async function handleIdCardFile(input) {
+      if (!input.files || !input.files[0]) return;
+
+      const file = input.files[0];
+      const overlay = document.getElementById('idcardOverlay');
+      const overlayMsg = document.getElementById('idcardOverlayMsg');
+      const badge = document.getElementById('idcardBadge');
+      const badgeText = document.getElementById('idcardBadgeText');
+
+      // แสดง overlay
+      overlay.classList.add('show');
+      overlayMsg.textContent = '🤖 กำลังสแกนบัตรด้วย AI...';
+      badge.className = 'idcard-ocr-badge'; // reset
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const res = await fetch('/api/v1/ocr/idcard', { method: 'POST', body: formData });
+        const json = await res.json();
+
+        if (!res.ok || !json.success) {
+          throw new Error(json.message || json.error || 'API ตอบกลับผิดพลาด');
+        }
+
+        const d = json.data;
+
+        // ── ตรวจสอบเลขบัตร 13 หลัก + checksum (client-side ซ้ำ) ───
+        const idNum = (d.id_number || '').replace(/\D/g, '');
+        const idOk = /^\d{13}$/.test(idNum) && validateIDChecksum(idNum);
+        const serverValid = json.id_valid === true;
+
+        // ── Auto-fill fields ─────────────────────────────────────────
+        overlayMsg.textContent = '✅ กำลังกรอกข้อมูล...';
+        fillIDCardFields(d, idNum);
+
+        // ── แสดง badge ───────────────────────────────────────────────
+        if (serverValid && idOk) {
+          badgeText.textContent = `✅ เลขบัตร ${formatIDDisplay(idNum)} — ตรวจสอบผ่าน`;
+          badge.className = 'idcard-ocr-badge show';
+        } else {
+          badgeText.textContent = `⚠️ เลขบัตร ${formatIDDisplay(idNum)} — กรุณาตรวจสอบอีกครั้ง`;
+          badge.className = 'idcard-ocr-badge show warn';
+        }
+
+        highlightIDCardFields();
+
+      } catch (err) {
+        alert('❌ สแกนบัตรไม่สำเร็จ: ' + err.message + '\n\nกรุณาถ่ายรูปให้ชัดขึ้น และให้เห็นเลข 13 หลักครบถ้วน');
+      } finally {
+        overlay.classList.remove('show');
+        input.value = ''; // reset ให้ถ่ายซ้ำได้
+      }
+    }
+
+    /**
+     * fillIDCardFields — ใส่ข้อมูลจาก OCR ลงใน form fields
+     */
+    function fillIDCardFields(d, idNum) {
+      const setVal = (sel, val) => {
+        const el = document.querySelector(sel);
+        if (el && val) el.value = val;
+      };
+      const setSelectText = (sel, text) => {
+        const el = document.querySelector(sel);
+        if (el && text) selectByText(el, text);
+      };
+
+      // ── ข้อมูลส่วนตัว ─────────────────────────────────────────────
+      setSelectText('#title', d.title);
+      setVal('#first_name', d.first_name);
+      setVal('#last_name', d.last_name);
+      setVal('#id_card', idNum);   // 13 หลัก ไม่มีขีด
+      setSelectText('#gender', d.gender);
+
+      // ── ศาสนา (select โหลดจาก /api/religions) ────────────────────
+      if (d.religion) setSelectText('[name="religion"]', d.religion);
+
+      // ── วันเกิด → flatpickr readonly field ────────────────────────
+      // Gemini ส่งมา DD/MM/YYYY (ค.ศ.) — แปลงเป็น พ.ศ. สำหรับ flatpickr
+      if (d.date_of_birth) setFlatpickrDate('#date_of_birth', d.date_of_birth);
+
+      // ── วันออกบัตร / วันหมดอายุ ──────────────────────────────────
+      if (d.issue_date) setFlatpickrDate('#id_card_issue_date', d.issue_date);
+      if (d.expiry_date) setFlatpickrDate('#id_card_expiry_date', d.expiry_date);
+
+      // ── ที่อยู่ตามทะเบียนบ้าน ─────────────────────────────────────
+      setVal('[name="house_reg_no"]', d.house_no);
+      setVal('[name="house_reg_moo"]', d.moo);
+      setVal('[name="house_reg_soi"]', d.soi);
+      setVal('[name="house_reg_road"]', d.road);
+      setVal('[name="house_reg_zipcode"]', d.zipcode);
+      setSelectText('[name="house_reg_province"]', d.province);
+      setSelectText('[name="house_reg_district"]', d.district);
+      setSelectText('[name="house_reg_subdistrict"]', d.subdistrict);
+    }
+
+    /**
+     * setFlatpickrDate — ตั้งค่าวันที่ใน flatpickr readonly input
+     * รับ dateStr แบบ "DD/MM/YYYY" ค.ศ. จาก Gemini
+     * แปลงปีเป็น พ.ศ. (+543) เพื่อส่งให้ flatpickr ที่ใช้ Thai locale
+     */
+    function setFlatpickrDate(selector, dateStr) {
+      if (!dateStr) return;
+      const el = document.querySelector(selector);
+      if (!el) return;
+
+      let finalStr = dateStr;
+      // พยายาม parse เผื่อ Gemini ส่ง "DD-MM-YYYY" หรือมีปี พ.ศ.
+      const parts = dateStr.replace(/-/g, '/').split('/');
+      if (parts.length === 3) {
+        const dd = parseInt(parts[0], 10);
+        const mm = parseInt(parts[1], 10) - 1;
+        let yyyy = parseInt(parts[2], 10);
+
+        if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
+          // ถ้าปีเกิน 2400 ถือว่าเป็น พ.ศ. → แปลงกลับเป็น ค.ศ. สำหรับ JS Date
+          const ceYear = yyyy > 2400 ? yyyy - 543 : yyyy;
+          const jsDate = new Date(ceYear, mm, dd);
+
+          if (!isNaN(jsDate.getTime()) && el._flatpickr) {
+            try {
+              el._flatpickr.setDate(jsDate, true);
+              return;
+            } catch (e) {
+              console.warn('setFlatpickrDate fallback:', selector, e.message);
+            }
+          }
+          const beYear = ceYear + 543;
+          const padded = (n) => String(n).padStart(2, '0');
+          finalStr = `${padded(dd)}/${padded(mm + 1)}/${beYear}`;
+        }
+      }
+
+      // Fallback: ตั้งค่าตรงๆ เอา value ยัดเลย
+      el.removeAttribute('readonly');
+      el.value = finalStr;
+      el.setAttribute('readonly', 'readonly');
+      // Delay นิดนึงป้องกัน flatpickr จับ change แล้วล้างค่าทิ้งถ้า format ไม่ตรง 100%
+      setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 100);
+    }
+
+    /**
+     * selectByText — เลือก option ที่ text หรือ value ตรงกัน (partial match)
+     */
+    function selectByText(select, keyword) {
+      const kw = keyword.trim().toLowerCase();
+      let bestIdx = -1, bestScore = 0;
+      for (let i = 0; i < select.options.length; i++) {
+        const t = select.options[i].text.trim().toLowerCase();
+        const v = select.options[i].value.trim().toLowerCase();
+        if (t === kw || v === kw) { select.selectedIndex = i; return; }
+        if (t.includes(kw) || kw.includes(t)) {
+          if (t.length > bestScore) { bestScore = t.length; bestIdx = i; }
+        }
+      }
+      if (bestIdx >= 0) select.selectedIndex = bestIdx;
+    }
+
+    /**
+     * validateIDChecksum — ตรวจ checksum เลขบัตรประชาชน 13 หลัก
+     */
+    function validateIDChecksum(id) {
+      if (!/^\d{13}$/.test(id)) return false;
+      let sum = 0;
+      for (let i = 0; i < 12; i++) sum += parseInt(id[i]) * (13 - i);
+      return ((11 - (sum % 11)) % 10) === parseInt(id[12]);
+    }
+
+    /**
+     * formatIDDisplay — แสดงเลขบัตรแบบ x-xxxx-xxxxx-xx-x
+     */
+    function formatIDDisplay(id) {
+      if (id.length !== 13) return id;
+      return `${id[0]}-${id.slice(1, 5)}-${id.slice(5, 10)}-${id.slice(10, 12)}-${id[12]}`;
+    }
+
+    /**
+     * highlightIDCardFields — Pulse สีเขียวบน fields ที่ถูก auto-fill
+     */
+    function highlightIDCardFields() {
+      const sels = [
+        '#title', '#first_name', '#last_name', '#id_card', '#gender',
+        '#date_of_birth', '#id_card_issue_date', '#id_card_expiry_date',
+        '[name="religion"]',
+        '[name="house_reg_no"]', '[name="house_reg_moo"]',
+        '[name="house_reg_soi"]', '[name="house_reg_road"]',
+        '[name="house_reg_province"]', '[name="house_reg_district"]',
+        '[name="house_reg_subdistrict"]', '[name="house_reg_zipcode"]'
+      ];
+      sels.forEach(sel => {
+        const el = document.querySelector(sel);
+        if (!el) return;
+        el.style.transition = 'box-shadow 0.4s, border-color 0.4s';
+        el.style.borderColor = '#10b981';
+        el.style.boxShadow = '0 0 0 4px rgba(16,185,129,0.25)';
+        setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 2500);
+      });
+    }
+  </script>
 </body>
 
 </html>

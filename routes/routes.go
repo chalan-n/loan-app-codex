@@ -56,6 +56,11 @@ func Setup(app *fiber.App) {
 	app.Get("/api/insucomps", handlers.GetInsuComps)
 	app.Get("/api/insuclasses", handlers.GetInsuClasses)
 
+	// OCR — Gemini AI วิเคราะห์เล่มทะเบียนรถไทย + บัตรประชาชน
+	v1 := app.Group("/api/v1")
+	v1.Post("/ocr/vehicle", handlers.OcrVehicleBook)
+	v1.Post("/ocr/idcard", handlers.OcrIDCard)
+
 	// File Download (R2)
 	app.Get("/file/:filename", handlers.GetFile)
 

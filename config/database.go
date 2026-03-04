@@ -11,8 +11,8 @@ import (
 var DB *gorm.DB
 
 func ConnectDB() {
-	dsn := "root:@tcp(127.0.0.1:3308)/loan_db?charset=utf8mb4&parseTime=True&loc=Local"
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	cfg := GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
 		panic("เชื่อม DB ไม่ได้: " + err.Error())
 	}

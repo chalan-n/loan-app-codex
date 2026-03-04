@@ -40,10 +40,16 @@ Thumbs.db
 *.log
 logs/
 
-# Environment files
+# Environment files — ห้าม commit ไฟล์เหล่านี้เด็ดขาด (มี secrets)
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+# อนุญาต template ที่ไม่มี secret จริง
+!.env.example
+!.env.development.example
+!.env.production.example
 
 # Database files
 *.db

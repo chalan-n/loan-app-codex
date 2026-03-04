@@ -788,6 +788,174 @@
         width: 100%;
       }
     }
+
+    /* ========== OCR Camera Scan Card ========== */
+    .ocr-card {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #1e40af 100%);
+      border-radius: 20px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(30, 58, 138, 0.25);
+    }
+
+    .ocr-card::before {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .ocr-card::after {
+      content: '';
+      position: absolute;
+      bottom: -40px;
+      left: 40%;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .ocr-card-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .ocr-card-icon i {
+      font-size: 2.2rem;
+      color: #93c5fd;
+    }
+
+    .ocr-card-text {
+      flex: 1;
+      z-index: 1;
+    }
+
+    .ocr-card-text h3 {
+      color: white;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .ocr-card-text p {
+      color: #bfdbfe;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .btn-scan {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 28px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+      z-index: 1;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.5);
+      transition: all 0.3s ease;
+    }
+
+    .btn-scan:hover {
+      transform: translateY(-3px) scale(1.04);
+      box-shadow: 0 8px 28px rgba(99, 102, 241, 0.65);
+    }
+
+    .btn-scan i {
+      font-size: 1.3rem;
+    }
+
+    /* OCR Loading Overlay */
+    #ocrOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 9000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #ocrOverlay.show {
+      display: flex;
+    }
+
+    .ocr-spinner {
+      width: 64px;
+      height: 64px;
+      border: 5px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #ocrOverlayMsg {
+      color: white;
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    /* OCR Result Badge */
+    .ocr-badge {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .ocr-badge.show {
+      display: inline-flex;
+    }
+
+    @media (max-width: 768px) {
+      .ocr-card {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .btn-scan {
+        width: 100%;
+        justify-content: center;
+      }
+    }
   </style>
 </head>
 
@@ -884,6 +1052,34 @@
 
     <div class="form-body">
       <form method="POST" action="/step2" onsubmit="showLoading('กำลังบันทึกและไปหน้าถัดไป...');">
+
+        <!-- ===== OCR Camera Scan Card ===== -->
+        <div class="ocr-card">
+          <div class="ocr-card-icon">
+            <i class="fas fa-id-card"></i>
+          </div>
+          <div class="ocr-card-text">
+            <h3>📷 สแกนเล่มทะเบียนด้วย AI</h3>
+            <p>ถ่ายรูปหน้าเล่มทะเบียน — ระบบจะกรอกข้อมูลรถให้อัตโนมัติ</p>
+            <div class="ocr-badge" id="ocrBadge">
+              <i class="fas fa-check-circle"></i>
+              <span id="ocrBadgeText">สแกนสำเร็จ</span>
+            </div>
+          </div>
+          <!-- Hidden file input: capture=environment เปิดกล้องหลังมือถือ -->
+          <input type="file" id="ocrFileInput" accept="image/*" capture="environment" style="display:none;"
+            onchange="handleOcrFile(this)">
+          <button type="button" class="btn-scan" onclick="document.getElementById('ocrFileInput').click()">
+            <i class="fas fa-camera"></i> ถ่ายรูป / อัปโหลด
+          </button>
+        </div>
+
+        <!-- OCR Loading Overlay -->
+        <div id="ocrOverlay">
+          <div class="ocr-spinner"></div>
+          <div id="ocrOverlayMsg">🤖 กำลังสแกนด้วย AI...</div>
+        </div>
+
         <!-- ข้อมูลรถ -->
         <div class="section">
           <div class="section-title"><i class="fas fa-car"></i> ข้อมูลรถ</div>
@@ -1279,6 +1475,153 @@
 
     });
   </script> <!-- End previous script block -->
+
+  <!-- ===================================================
+       OCR Camera Scan — Auto-fill Vehicle Info
+       =================================================== -->
+  <script>
+    /**
+     * handleOcrFile — ถูกเรียกเมื่อ MO เลือกรูปจาก camera / gallery
+     * ส่ง FormData ไปที่ /api/v1/ocr/vehicle แล้ว auto-fill ฟิลด์รถ
+     */
+    async function handleOcrFile(input) {
+      if (!input.files || !input.files[0]) return;
+
+      const file = input.files[0];
+      const overlay = document.getElementById('ocrOverlay');
+      const overlayMsg = document.getElementById('ocrOverlayMsg');
+
+      // ── แสดง Loading Overlay ──────────────────────────────────────
+      overlay.classList.add('show');
+      overlayMsg.textContent = '🤖 กำลังสแกนด้วย AI...';
+
+      try {
+        // ── ส่งรูปไปที่ Gemini OCR API ───────────────────────────────
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const res = await fetch('/api/v1/ocr/vehicle', {
+          method: 'POST',
+          body: formData
+          // ไม่ set Content-Type เพื่อให้ browser จัดการ boundary ของ multipart เอง
+        });
+
+        const json = await res.json();
+
+        if (!res.ok || !json.success) {
+          throw new Error(json.message || json.error || 'API ตอบกลับผิดพลาด');
+        }
+
+        // ── Auto-fill ฟิลด์รถ ─────────────────────────────────────
+        overlayMsg.textContent = '✅ กำลังกรอกข้อมูล...';
+        fillVehicleFields(json.data);
+
+        // แสดง badge สำเร็จ
+        const badge = document.getElementById('ocrBadge');
+        const badgeText = document.getElementById('ocrBadgeText');
+        badgeText.textContent = `สแกนสำเร็จ — เลขตัวถัง ${json.data.chassis_number || '-'}`;
+        badge.classList.add('show');
+
+      } catch (err) {
+        alert('❌ สแกนไม่สำเร็จ: ' + err.message + '\n\nกรุณาถ่ายรูปใหม่ให้ชัดขึ้น');
+      } finally {
+        overlay.classList.remove('show');
+        // reset input เพื่อให้ onchange ยิงได้อีกครั้งถ้าถ่ายรูปซ้ำ
+        input.value = '';
+      }
+    }
+
+    /**
+     * fillVehicleFields — นำ VehicleInfo JSON ไปใส่ใน input fields ต่างๆ
+     * @param {Object} d - data จาก /api/v1/ocr/vehicle response
+     */
+    function fillVehicleFields(d) {
+      const setVal = (name, val) => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el && val) el.value = val;
+      };
+
+      // ── ข้อความตรงไปตรงมา ────────────────────────────────────────
+      setVal('car_chassis_no', d.chassis_number);
+      setVal('car_engine_no', d.engine_number);
+      setVal('license_plate', d.plate_number);
+      setVal('car_year', d.model_year ? String(d.model_year) : '');
+
+      // ── ตัวเลข CC และน้ำหนัก ─────────────────────────────────────
+      if (d.engine_cc && d.engine_cc > 0) setVal('car_cc', String(d.engine_cc));
+      if (d.car_weight && d.car_weight > 0) setVal('car_weight', String(d.car_weight));
+
+      // ── วันจดทะเบียน ──────────────────────────────────────────────
+      if (d.registration_date) {
+        setVal('car_register_date', d.registration_date);
+      }
+
+      // ── Select: จังหวัด (license_province) ───────────────────────
+      if (d.province) {
+        const provSelect = document.querySelector('select[name="license_province"]');
+        if (provSelect) setSelectByText(provSelect, d.province);
+      }
+
+      // ── Select: ยี่ห้อรถ (car_brand) ─────────────────────────────
+      if (d.vehicle_brand) {
+        const brandSelect = document.querySelector('select[name="car_brand"]');
+        if (brandSelect) setSelectByText(brandSelect, d.vehicle_brand);
+      }
+
+      // ── Select: สีรถ (car_color) ──────────────────────────────────
+      if (d.color) {
+        const colorSelect = document.querySelector('select[name="car_color"]');
+        if (colorSelect) setSelectByText(colorSelect, d.color);
+      }
+
+      // Highlight fields ที่ถูก fill เพื่อให้ MO เห็นว่าอะไรเปลี่ยน
+      highlightFilledFields();
+    }
+
+    /**
+     * setSelectByText — เลือก option ที่ text หรือ value ตรงกับ keyword
+     * (ใช้ partial match เพื่อรองรับชื่อที่อาจสะกดต่าง)
+     */
+    function setSelectByText(select, keyword) {
+      const kw = keyword.trim().toLowerCase();
+      let bestIdx = -1;
+      let bestScore = 0;
+
+      for (let i = 0; i < select.options.length; i++) {
+        const text = select.options[i].text.trim().toLowerCase();
+        const value = select.options[i].value.trim().toLowerCase();
+
+        if (text === kw || value === kw) { select.selectedIndex = i; return; } // exact match
+        if (text.includes(kw) || kw.includes(text)) {
+          const score = text.length;
+          if (score > bestScore) { bestScore = score; bestIdx = i; }
+        }
+      }
+      if (bestIdx >= 0) select.selectedIndex = bestIdx;
+    }
+
+    /**
+     * highlightFilledFields — Pulse animation บน fields ที่เพิ่งถูก auto-fill
+     */
+    function highlightFilledFields() {
+      const names = [
+        'car_chassis_no', 'car_engine_no', 'license_plate',
+        'car_year', 'car_register_date', 'license_province', 'car_brand', 'car_color',
+        'car_cc', 'car_weight'
+      ];
+      names.forEach(name => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (!el) return;
+        el.style.transition = 'box-shadow 0.4s, border-color 0.4s';
+        el.style.borderColor = '#10b981';
+        el.style.boxShadow = '0 0 0 4px rgba(16,185,129,0.25)';
+        setTimeout(() => {
+          el.style.borderColor = '';
+          el.style.boxShadow = '';
+        }, 2500);
+      });
+    }
+  </script>
 
   <!-- Car Search Modal -->
   <div id="carSearchModal"
