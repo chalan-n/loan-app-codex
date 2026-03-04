@@ -2454,39 +2454,68 @@
       const el = document.querySelector(selector);
       if (!el) return;
 
-      let finalStr = dateStr;
-      // พยายาม parse เผื่อ Gemini ส่ง "DD-MM-YYYY" หรือมีปี พ.ศ.
+      // พยายาม parse เผื่อ Gemini ส่ง "DD/MM/YYYY", "DD-MM-YYYY" หรือมีปี พ.ศ.
       const parts = dateStr.replace(/-/g, '/').split('/');
-      if (parts.length === 3) {
-        const dd = parseInt(parts[0], 10);
-        const mm = parseInt(parts[1], 10) - 1;
-        let yyyy = parseInt(parts[2], 10);
+      if (parts.length !== 3) return;
 
-        if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
-          // ถ้าปีเกิน 2400 ถือว่าเป็น พ.ศ. → แปลงกลับเป็น ค.ศ. สำหรับ JS Date
-          const ceYear = yyyy > 2400 ? yyyy - 543 : yyyy;
-          const jsDate = new Date(ceYear, mm, dd);
+      const dd = parseInt(parts[0], 10);
+      const mm = parseInt(parts[1], 10) - 1;
+      let yyyy = parseInt(parts[2], 10);
 
-          if (!isNaN(jsDate.getTime()) && el._flatpickr) {
-            try {
-              el._flatpickr.setDate(jsDate, true);
-              return;
-            } catch (e) {
-              console.warn('setFlatpickrDate fallback:', selector, e.message);
-            }
+      if (isNaN(dd) || isNaN(mm) || isNaN(yyyy)) return;
+
+      // ถ้าปีเกิน 2400 ถือว่าเป็น พ.ศ. → แปลงกลับเป็น ค.ศ.
+      const ceYear = yyyy > 2400 ? yyyy - 543 : yyyy;
+      const jsDate = new Date(ceYear, mm, dd);
+      if (isNaN(jsDate.getTime())) return;
+
+      const padded = (n) => String(n).padStart(2, '0');
+      const beYear = ceYear + 543;
+      const ceStr = `${ceYear}-${padded(mm + 1)}-${padded(dd)}`;        // YYYY-MM-DD ค.ศ. สำหรับ hidden input
+      const beDisplayStr = `${padded(dd)}-${padded(mm + 1)}-${beYear}`; // DD-MM-YYYY พ.ศ. สำหรับ altInput
+
+      // วิธีที่ 1: ผ่าน flatpickr instance (ถ้ามี)
+      if (el._flatpickr) {
+        try {
+          el._flatpickr.setDate(jsDate, true);
+          // Force altInput ให้แสดงปี พ.ศ. เสมอ (กัน instance ที่ formatDate ทำงานผิดพลาด)
+          const fpAlt = el._flatpickr.altInput;
+          if (fpAlt) {
+            fpAlt.removeAttribute('readonly');
+            fpAlt.value = beDisplayStr;
+            fpAlt.setAttribute('readonly', 'readonly');
           }
-          const beYear = ceYear + 543;
-          const padded = (n) => String(n).padStart(2, '0');
-          finalStr = `${padded(dd)}/${padded(mm + 1)}/${beYear}`;
+          // Trigger calculateAge สำหรับ date_of_birth
+          if (selector === '#date_of_birth') setTimeout(() => calculateAge(), 50);
+          return;
+        } catch (e) {
+          console.warn('setFlatpickrDate via _flatpickr failed:', selector, e.message);
         }
       }
 
-      // Fallback: ตั้งค่าตรงๆ เอา value ยัดเลย
+      // วิธีที่ 2: ตั้งค่า hidden input (CE) และ altInput (BE) โดยตรง
       el.removeAttribute('readonly');
-      el.value = finalStr;
+      el.value = ceStr;
       el.setAttribute('readonly', 'readonly');
-      // Delay นิดนึงป้องกัน flatpickr จับ change แล้วล้างค่าทิ้งถ้า format ไม่ตรง 100%
-      setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 100);
+
+      // หา altInput ที่ flatpickr สร้างให้ (อยู่ถัดจาก original input ใน DOM)
+      const altInput = el.nextElementSibling && el.nextElementSibling.classList.contains('flatpickr-input')
+        ? el.nextElementSibling
+        : el.parentElement && el.parentElement.querySelector('input.flatpickr-input.flatpickr-alt-input')
+          ? el.parentElement.querySelector('input.flatpickr-input.flatpickr-alt-input')
+          : null;
+
+      if (altInput) {
+        altInput.removeAttribute('readonly');
+        altInput.value = beDisplayStr;
+        altInput.setAttribute('readonly', 'readonly');
+      }
+
+      // Trigger calculateAge สำหรับ date_of_birth
+      setTimeout(() => {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        if (selector === '#date_of_birth') calculateAge();
+      }, 50);
     }
 
     /**
