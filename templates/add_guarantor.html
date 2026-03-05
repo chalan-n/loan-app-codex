@@ -792,6 +792,345 @@
         transform: translateX(5px);
       }
     }
+
+    /* ========== ID Card OCR Card ========== */
+    .idcard-ocr-card {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 55%, #047857 100%);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 4px 16px rgba(6, 78, 59, 0.22);
+    }
+
+    .idcard-ocr-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .idcard-ocr-text h3 {
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .idcard-ocr-text p {
+      display: none;
+    }
+
+    .idcard-ocr-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 50px;
+      padding: 3px 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 6px;
+      width: fit-content;
+    }
+
+    .idcard-ocr-badge.show {
+      display: inline-flex;
+    }
+
+    .idcard-ocr-badge.warn {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .btn-scan-id {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 10px 18px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35);
+      transition: all 0.3s;
+    }
+
+    .btn-scan-id:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 18px rgba(16, 185, 129, 0.5);
+    }
+
+    /* OCR Loading Overlay */
+    #idcardOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 9000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #idcardOverlay.show {
+      display: flex;
+    }
+
+    .idcard-spinner {
+      width: 64px;
+      height: 64px;
+      border: 5px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #34d399;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #idcardOverlayMsg {
+      color: white;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    /* ========== Camera Guide Overlay ========== */
+    .cam-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #camVideo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cam-guide-mask {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .cam-guide {
+      position: relative;
+      width: min(82vw, 520px);
+      aspect-ratio: 8.5/5.4;
+      border: 3px dashed #34d399;
+      border-radius: 16px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 30px rgba(52, 211, 153, 0.3), inset 0 0 30px rgba(52, 211, 153, 0.08);
+      animation: camPulse 2.5s ease-in-out infinite;
+    }
+
+    @keyframes camPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 20px rgba(52, 211, 153, 0.2), inset 0 0 20px rgba(52, 211, 153, 0.05)
+      }
+
+      50% {
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 40px rgba(52, 211, 153, 0.45), inset 0 0 40px rgba(52, 211, 153, 0.12)
+      }
+    }
+
+    .cam-corner {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border-color: #34d399;
+      border-style: solid;
+      border-width: 0;
+    }
+
+    .cam-corner.tl {
+      top: -3px;
+      left: -3px;
+      border-top-width: 4px;
+      border-left-width: 4px;
+      border-radius: 12px 0 0 0
+    }
+
+    .cam-corner.tr {
+      top: -3px;
+      right: -3px;
+      border-top-width: 4px;
+      border-right-width: 4px;
+      border-radius: 0 12px 0 0
+    }
+
+    .cam-corner.bl {
+      bottom: -3px;
+      left: -3px;
+      border-bottom-width: 4px;
+      border-left-width: 4px;
+      border-radius: 0 0 0 12px
+    }
+
+    .cam-corner.br {
+      bottom: -3px;
+      right: -3px;
+      border-bottom-width: 4px;
+      border-right-width: 4px;
+      border-radius: 0 0 12px 0
+    }
+
+    .cam-guide-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.95rem;
+      text-align: center;
+      pointer-events: none;
+      line-height: 1.5;
+    }
+
+    .cam-hint {
+      position: absolute;
+      top: max(env(safe-area-inset-top, 12px), 12px);
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(8px);
+      padding: 10px 22px;
+      border-radius: 50px;
+      white-space: nowrap;
+      z-index: 2;
+    }
+
+    .cam-controls {
+      position: absolute;
+      bottom: max(env(safe-area-inset-bottom, 20px), 20px);
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 24px;
+      z-index: 2;
+    }
+
+    .cam-btn-close,
+    .cam-btn-gallery {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      font-size: 0.92rem;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .cam-btn-close:hover,
+    .cam-btn-gallery:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .cam-btn-capture {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 4px solid white;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+    }
+
+    .cam-btn-capture:hover {
+      transform: scale(1.08)
+    }
+
+    .cam-btn-capture:active {
+      transform: scale(0.92)
+    }
+
+    .cam-shutter {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: white;
+      display: block;
+      transition: background 0.15s;
+    }
+
+    .cam-btn-capture:active .cam-shutter {
+      background: #34d399;
+    }
+
+    .cam-flash {
+      position: absolute;
+      inset: 0;
+      background: white;
+      z-index: 3;
+      animation: flashAnim 0.35s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes flashAnim {
+      0% {
+        opacity: 0.8
+      }
+
+      100% {
+        opacity: 0
+      }
+    }
+
+    @media(max-width:480px) {
+      .cam-guide {
+        width: 90vw
+      }
+
+      .cam-btn-capture {
+        width: 64px;
+        height: 64px
+      }
+
+      .cam-shutter {
+        width: 48px;
+        height: 48px
+      }
+
+      .cam-btn-close,
+      .cam-btn-gallery {
+        padding: 10px 14px;
+        font-size: 0.82rem
+      }
+    }
   </style>
 </head>
 
@@ -856,6 +1195,50 @@
       <div class="section-title">
         <i class="fas fa-user-plus"></i> เพิ่มข้อมูลผู้ค้ำประกัน
       </div>
+
+      <!-- ===== ID Card OCR Scan Card ===== -->
+      <div class="idcard-ocr-card">
+        <div class="idcard-ocr-text">
+          <h3>📷 สแกนบัตรประชาชนด้วย AI</h3>
+          <div class="idcard-ocr-badge" id="idcardBadge">
+            <i class="fas fa-check-circle"></i>
+            <span id="idcardBadgeText">สแกนสำเร็จ</span>
+          </div>
+        </div>
+        <input type="file" id="idcardFileInput" accept="image/*" capture="environment" style="display:none;"
+          onchange="handleIdCardFile(this)">
+        <button type="button" class="btn-scan-id" onclick="openCamOverlay()">
+          <i class="fas fa-camera"></i> ถ่ายรูป / อัปโหลด
+        </button>
+      </div>
+      <!-- OCR Loading Overlay -->
+      <div id="idcardOverlay">
+        <div class="idcard-spinner"></div>
+        <div id="idcardOverlayMsg">🤖 กำลังสแกนบัตรด้วย AI...</div>
+      </div>
+      <!-- Camera Guide Overlay -->
+      <div id="camOverlay" class="cam-overlay" style="display:none;">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <div class="cam-guide-mask">
+          <div class="cam-guide">
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+            <div class="cam-guide-label"><i class="fas fa-id-card"
+                style="font-size:1.8rem;opacity:0.4;margin-bottom:6px;"></i><br>บัตรประชาชน</div>
+          </div>
+        </div>
+        <div class="cam-hint">📷 วางบัตรประชาชนให้อยู่ในกรอบ</div>
+        <div class="cam-controls">
+          <button type="button" class="cam-btn-close" onclick="closeCamOverlay()">✕ ยกเลิก</button>
+          <button type="button" class="cam-btn-capture" onclick="captureIdCard()"><span
+              class="cam-shutter"></span></button>
+          <button type="button" class="cam-btn-gallery"
+            onclick="closeCamOverlay();document.getElementById('idcardFileInput').click();">🖼️ แกลเลอรี</button>
+        </div>
+      </div>
+      <canvas id="camCanvas" style="display:none;"></canvas>
 
       <form method="POST" action="/add-guarantor" novalidate>
         <input type="hidden" name="loan_id" value="{{ .LoanID }}">
@@ -935,15 +1318,16 @@
             <div class="col">
               <label>วันออกบัตร :</label>
               <div class="input-group">
-                <input type="text" name="id_card_issue_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ if .Guarantor.IdCardIssueDate }}{{ .Guarantor.IdCardIssueDate }}{{ end }}" readonly>
+                <input type="text" name="id_card_issue_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่"
+                  value="{{ if .Guarantor.IdCardIssueDate }}{{ .Guarantor.IdCardIssueDate }}{{ end }}" readonly>
               </div>
             </div>
             <div class="col">
               <label>วันบัตรหมดอายุ :</label>
               <div class="input-group">
-                <input type="text" name="id_card_expiry_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ .Guarantor.IdCardExpiryDate }}" readonly>
+                <input type="text" name="id_card_expiry_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่" value="{{ .Guarantor.IdCardExpiryDate }}" readonly>
               </div>
             </div>
           </div>
@@ -953,8 +1337,9 @@
             <div class="col">
               <label>วันจดทะเบียน :</label>
               <div class="input-group">
-                <input type="text" name="registration_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ if .Guarantor.RegistrationDate }}{{ .Guarantor.RegistrationDate }}{{ end }}" readonly>
+                <input type="text" name="registration_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่"
+                  value="{{ if .Guarantor.RegistrationDate }}{{ .Guarantor.RegistrationDate }}{{ end }}" readonly>
               </div>
             </div>
           </div>
@@ -964,8 +1349,9 @@
             <div class="col">
               <label>วันเดือนปีเกิด :</label>
               <div class="input-group">
-                <input type="text" name="date_of_birth" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ if .Guarantor.DateOfBirth }}{{ .Guarantor.DateOfBirth }}{{ end }}" readonly>
+                <input type="text" name="date_of_birth" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่" value="{{ if .Guarantor.DateOfBirth }}{{ .Guarantor.DateOfBirth }}{{ end }}"
+                  readonly>
               </div>
             </div>
             <div class="col">
@@ -1027,16 +1413,17 @@
             <div class="col">
               <label>วันออกบัตร :</label>
               <div class="input-group">
-                <input type="text" name="other_card_issue_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ if .Guarantor.OtherCardIssueDate }}{{ .Guarantor.OtherCardIssueDate }}{{ end }}" readonly>
+                <input type="text" name="other_card_issue_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่"
+                  value="{{ if .Guarantor.OtherCardIssueDate }}{{ .Guarantor.OtherCardIssueDate }}{{ end }}" readonly>
               </div>
             </div>
             <!-- วันบัตรหมดอายุ -->
             <div class="col">
               <label>วันบัตรหมดอายุ :</label>
               <div class="input-group">
-                <input type="text" name="other_card_expiry_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                value="{{ .Guarantor.OtherCardExpiryDate }}" readonly>
+                <input type="text" name="other_card_expiry_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่" value="{{ .Guarantor.OtherCardExpiryDate }}" readonly>
               </div>
             </div>
           </div>
@@ -1833,9 +2220,9 @@
         if (cachedData) {
           try {
             const { provinces: p, districts: d, subdistricts: s } = JSON.parse(cachedData);
-            provinces = p;
-            districts = d;
-            subdistricts = s;
+            provinces = window._addrProvinces = p;
+            districts = window._addrDistricts = d;
+            subdistricts = window._addrSubdistricts = s;
 
             if (updateHouseReg) updateHouseReg();
             if (updateCurrent) updateCurrent();
@@ -1873,9 +2260,9 @@
         fetch('/static/data/district.json').then(r => r.json()),
         fetch('/static/data/sub_districts.json').then(r => r.json())
       ]).then(([p, d, s]) => {
-        provinces = p;
-        districts = d;
-        subdistricts = s;
+        provinces = window._addrProvinces = p;
+        districts = window._addrDistricts = d;
+        subdistricts = window._addrSubdistricts = s;
 
         // Save cache (use a different key so it forces a refresh and picks up district_id fix)
         localStorage.setItem('addressData_v3', JSON.stringify({ provinces: p, districts: d, subdistricts: s }));
@@ -2082,6 +2469,234 @@
         }
       });
     });
+  </script>
+
+  <!-- ===================================================
+       OCR บัตรประชาชน — Auto-fill ผู้ค้ำประกัน
+       =================================================== -->
+  <script>
+    /* ========== Camera ========== */
+    let camStream = null;
+
+    async function openCamOverlay() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (!window.isSecureContext) {
+          alert('⚠️ เปิดกล้องไม่ได้\n\nเบราว์เซอร์ต้องการ HTTPS\nURL: ' + location.origin + '\n\nกรุณาใช้ HTTPS หรือเลือกรูปจากแกลเลอรี');
+        }
+        document.getElementById('idcardFileInput').click();
+        return;
+      }
+      const overlay = document.getElementById('camOverlay');
+      overlay.style.display = 'flex';
+      const constraints = [
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+        { video: { facingMode: 'environment' }, audio: false },
+        { video: true, audio: false }
+      ];
+      let stream = null, lastErr = null;
+      for (const c of constraints) {
+        try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+        catch (e) { lastErr = e; }
+      }
+      if (!stream) {
+        overlay.style.display = 'none';
+        alert('⚠️ ' + (lastErr ? lastErr.message : 'ไม่สามารถเปิดกล้องได้'));
+        document.getElementById('idcardFileInput').click();
+        return;
+      }
+      camStream = stream;
+      const video = document.getElementById('camVideo');
+      video.srcObject = stream;
+      try { await video.play(); } catch (e) { }
+    }
+
+    function closeCamOverlay() {
+      document.getElementById('camOverlay').style.display = 'none';
+      if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+      document.getElementById('camVideo').srcObject = null;
+    }
+
+    async function captureIdCard() {
+      const video = document.getElementById('camVideo');
+      const canvas = document.getElementById('camCanvas');
+      // Flash
+      const flash = document.createElement('div'); flash.className = 'cam-flash';
+      document.getElementById('camOverlay').appendChild(flash);
+      setTimeout(() => flash.remove(), 400);
+      // Capture
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      closeCamOverlay();
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+      await sendOcrBlob(blob);
+    }
+
+    /* ========== OCR: File upload ========== */
+    async function handleIdCardFile(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      await sendOcrBlob(file);
+      input.value = '';
+    }
+
+    /* ========== OCR: ส่ง + Auto-fill (shared) ========== */
+    async function sendOcrBlob(blob) {
+      const overlay = document.getElementById('idcardOverlay');
+      const overlayMsg = document.getElementById('idcardOverlayMsg');
+      const badge = document.getElementById('idcardBadge');
+      const badgeText = document.getElementById('idcardBadgeText');
+
+      overlay.classList.add('show');
+      overlayMsg.textContent = '🤖 กำลังสแกนบัตรด้วย AI...';
+      badge.className = 'idcard-ocr-badge';
+
+      try {
+        const fd = new FormData();
+        fd.append('image', blob, blob.name || 'idcard.jpg');
+        const res = await fetch('/api/v1/ocr/idcard', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (!res.ok || !json.success) throw new Error(json.message || json.error || 'API error');
+
+        const d = json.data;
+        const idNum = (d.id_number || '').replace(/\\D/g, '');
+        const idOk = /^\\d{13}$/.test(idNum) && validateIDChecksum(idNum);
+
+        overlayMsg.textContent = '✅ กำลังกรอกข้อมูล...';
+        fillGuarantorFields(d, idNum);
+
+        if (json.id_valid && idOk) {
+          badgeText.textContent = `✅ เลขบัตร ${formatIDDisplay(idNum)} — ตรวจสอบผ่าน`;
+          badge.className = 'idcard-ocr-badge show';
+        } else {
+          badgeText.textContent = `⚠️ เลขบัตร ${formatIDDisplay(idNum)} — กรุณาตรวจสอบ`;
+          badge.className = 'idcard-ocr-badge show warn';
+        }
+        highlightOCRFields();
+      } catch (err) {
+        alert('❌ สแกนบัตรไม่สำเร็จ: ' + err.message);
+      } finally {
+        overlay.classList.remove('show');
+      }
+    }
+
+    /* ========== fillGuarantorFields ========== */
+    function fillGuarantorFields(d, idNum) {
+      const setVal = (sel, val) => { const el = document.querySelector(sel); if (el && val) el.value = val; };
+      const setSelectText = (sel, text) => { const el = document.querySelector(sel); if (el && text) selectByText(el, text); };
+
+      setSelectText('[name="title"]', d.title);
+      setVal('[name="first_name"]', d.first_name);
+      setVal('[name="last_name"]', d.last_name);
+      setVal('[name="id_card"]', idNum);
+      setSelectText('[name="gender"]', d.gender);
+      if (d.religion) setSelectText('[name="religion"]', d.religion);
+
+      // Dates
+      if (d.date_of_birth) setFlatpickrDate('[name="date_of_birth"]', d.date_of_birth);
+      if (d.issue_date) setFlatpickrDate('[name="id_card_issue_date"]', d.issue_date);
+      if (d.expiry_date) setFlatpickrDate('[name="id_card_expiry_date"]', d.expiry_date);
+
+      // Address
+      setVal('[name="house_reg_no"]', d.house_no);
+      setVal('[name="house_reg_moo"]', d.moo);
+      setVal('[name="house_reg_soi"]', d.soi);
+      setVal('[name="house_reg_road"]', d.road);
+      fillAddressCascading('house_reg', d.province, d.district, d.subdistrict, d.zipcode);
+    }
+
+    /* ========== fillAddressCascading ========== */
+    function fillAddressCascading(prefix, provinceName, districtName, subdistrictName, ocrZipcode) {
+      const pSel = document.querySelector(`[name="${prefix}_province"]`);
+      const dSel = document.querySelector(`[name="${prefix}_district"]`);
+      const sSel = document.querySelector(`[name="${prefix}_subdistrict"]`);
+      const zInp = document.querySelector(`[name="${prefix}_zipcode"]`);
+      if (!pSel) return;
+
+      const norm = s => (s || '').trim().toLowerCase().replace(/^(อำเภอ|เขต|ตำบล|แขวง|จังหวัด)/u, '').trim();
+      const fuzzy = (arr, kw) => {
+        const k = norm(kw); if (!k) return null;
+        return arr.find(x => norm(x.name_th) === k) || arr.find(x => norm(x.name_th).startsWith(k) || k.startsWith(norm(x.name_th))) || arr.find(x => norm(x.name_th).includes(k) || k.includes(norm(x.name_th))) || null;
+      };
+      const P = window._addrProvinces || [], D = window._addrDistricts || [], S = window._addrSubdistricts || [];
+
+      const prov = fuzzy(P, provinceName);
+      if (prov) { pSel.value = prov.id; pSel.dispatchEvent(new Event('change')); }
+      const dList = prov ? D.filter(x => x.province_id == prov.id) : D;
+      const dist = fuzzy(dList, districtName);
+      if (dist && dSel) { dSel.value = dist.id; dSel.dispatchEvent(new Event('change')); }
+      const sList = dist ? S.filter(x => x.district_id == dist.id) : S;
+      const sub = fuzzy(sList, subdistrictName);
+      if (sub && sSel) {
+        const opt = Array.from(sSel.options).find(o => o.value == sub.id);
+        if (opt) { sSel.value = sub.id; sSel.dispatchEvent(new Event('change')); }
+        else if (zInp) { zInp.value = sub.zip_code || ocrZipcode || ''; }
+      }
+      if (ocrZipcode && zInp && !zInp.value) zInp.value = ocrZipcode;
+    }
+
+    /* ========== setFlatpickrDate ========== */
+    function setFlatpickrDate(selector, dateStr) {
+      if (!dateStr) return;
+      const el = document.querySelector(selector); if (!el) return;
+      let dd, mm, yyyy;
+      const n = dateStr.replace(/-/g, '/').trim();
+      const parts = n.split('/');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) { yyyy = +parts[0]; mm = +parts[1]; dd = +parts[2]; }
+        else { dd = +parts[0]; mm = +parts[1]; yyyy = +parts[2]; }
+      }
+      if (!dd || !mm || !yyyy) return;
+      if (yyyy > 2400) yyyy -= 543;
+      const jsDate = new Date(yyyy, mm - 1, dd);
+      if (isNaN(jsDate.getTime())) return;
+      const pad = n => String(n).padStart(2, '0');
+      const beYear = yyyy + 543;
+      el.value = `${yyyy}-${pad(mm)}-${pad(dd)}`;
+      if (el._flatpickr) { try { el._flatpickr.setDate(jsDate, false); } catch (e) { } }
+      let fpAlt = el._flatpickr && el._flatpickr.altInput;
+      if (!fpAlt) fpAlt = el.parentElement && el.parentElement.querySelector('.flatpickr-alt-input, input.flatpickr-input:not([name])');
+      if (fpAlt && fpAlt !== el) fpAlt.value = `${pad(dd)}-${pad(mm)}-${beYear}`;
+    }
+
+    /* ========== Helpers ========== */
+    function selectByText(select, keyword) {
+      const kw = keyword.trim().toLowerCase();
+      let bestIdx = -1, bestScore = 0;
+      for (let i = 0; i < select.options.length; i++) {
+        const t = (select.options[i].text || '').trim().toLowerCase();
+        const v = (select.options[i].value || '').trim().toLowerCase();
+        if (t === kw || v === kw) { bestIdx = i; break; }
+        if ((t.includes(kw) || kw.includes(t)) && t.length > bestScore) { bestScore = t.length; bestIdx = i; }
+      }
+      if (bestIdx >= 0) select.selectedIndex = bestIdx;
+    }
+
+    function validateIDChecksum(id) {
+      if (!/^\d{13}$/.test(id)) return false;
+      let sum = 0;
+      for (let i = 0; i < 12; i++) sum += parseInt(id[i]) * (13 - i);
+      return ((11 - (sum % 11)) % 10) === parseInt(id[12]);
+    }
+
+    function formatIDDisplay(id) {
+      return id.length === 13 ? `${id[0]}-${id.slice(1, 5)}-${id.slice(5, 10)}-${id.slice(10, 12)}-${id[12]}` : id;
+    }
+
+    function highlightOCRFields() {
+      const sels = [
+        '[name="title"]', '[name="first_name"]', '[name="last_name"]', '[name="id_card"]', '[name="gender"]',
+        '[name="date_of_birth"]', '[name="id_card_issue_date"]', '[name="id_card_expiry_date"]',
+        '[name="religion"]',
+        '[name="house_reg_no"]', '[name="house_reg_moo"]', '[name="house_reg_soi"]', '[name="house_reg_road"]',
+        '[name="house_reg_province"]', '[name="house_reg_district"]', '[name="house_reg_subdistrict"]', '[name="house_reg_zipcode"]'
+      ];
+      sels.forEach(sel => {
+        const el = document.querySelector(sel); if (!el) return;
+        el.style.transition = 'box-shadow 0.4s, border-color 0.4s';
+        el.style.borderColor = '#10b981'; el.style.boxShadow = '0 0 0 4px rgba(16,185,129,0.25)';
+        setTimeout(() => { el.style.borderColor = ''; el.style.boxShadow = ''; }, 2500);
+      });
+    }
   </script>
 </body>
 
