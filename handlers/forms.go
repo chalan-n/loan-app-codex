@@ -76,8 +76,9 @@ func MainPage(c *fiber.Ctx) error {
 	}
 
 	return c.Render("main", fiber.Map{
-		"title": "หน้าหลัก - CMO APP",
-		"Loans": loans,
+		"title":   "หน้าหลัก - CMO APP",
+		"Loans":   loans,
+		"StaffID": staffID,
 	})
 }
 
@@ -832,6 +833,7 @@ func Step7Post(c *fiber.Ctx) error {
 func UpdateStatus(c *fiber.Ctx) error {
 	type Request struct {
 		RefCode string `json:"ref_code"`
+		Status  string `json:"status"` // A=Approved, R=Rejected, C=Conditional
 	}
 
 	var req Request
@@ -844,11 +846,36 @@ func UpdateStatus(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Loan not found"})
 	}
 
-	loan.Status = "P"
-	loan.SubmittedDate = time.Now().Format("2006-01-02 15:04:05")
+	// ถ้าไม่ส่ง status มา ใช้ P (Pending) เหมือนเดิม
+	newStatus := req.Status
+	if newStatus == "" {
+		newStatus = "P"
+	}
+
+	loan.Status = newStatus
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
+	if newStatus == "P" {
+		loan.SubmittedDate = time.Now().Format("2006-01-02 15:04:05")
+	}
 
 	config.DB.Save(&loan)
+
+	// แจ้งเตือนเฉพาะเมื่อมีผลการอนุมัติ และส่งเฉพาะ staff เจ้าของเคส
+	borrowerName := loan.FirstName + " " + loan.LastName
+	if borrowerName == " " {
+		borrowerName = loan.RefCode
+	}
+	switch newStatus {
+	case "A":
+		BroadcastToStaff(loan.StaffID, "✅ อนุมัติสินเชื่อแล้ว",
+			fmt.Sprintf("เลขที่ %s - %s ได้รับการอนุมัติ", loan.RefCode, borrowerName))
+	case "R":
+		BroadcastToStaff(loan.StaffID, "❌ ไม่อนุมัติสินเชื่อ",
+			fmt.Sprintf("เลขที่ %s - %s ไม่ผ่านการอนุมัติ", loan.RefCode, borrowerName))
+	case "C":
+		BroadcastToStaff(loan.StaffID, "⚠️ อนุมัติแบบมีเงื่อนไข",
+			fmt.Sprintf("เลขที่ %s - %s อนุมัติแบบมีเงื่อนไข", loan.RefCode, borrowerName))
+	}
 
 	return c.JSON(fiber.Map{"success": true})
 }

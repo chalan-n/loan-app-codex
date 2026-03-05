@@ -977,7 +977,9 @@
       const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
       ws = new WebSocket(`${wsProtocol}${location.host}/ws`);
 
-      ws.onopen = () => console.log('WebSocket เชื่อมต่อสำเร็จ');
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'register', staff_id: '{{ .StaffID }}' }));
+      };
 
       ws.onmessage = function (event) {
         const data = JSON.parse(event.data);
@@ -1067,7 +1069,6 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
               } else {
-                addNotification('สำเร็จ', 'ส่งงานเรียบร้อยแล้ว');
                 // Change button state
                 btn.className = "btn-bottom btn-sent";
                 btn.innerHTML = '<i class="fas fa-check"></i> ส่งแล้ว';
@@ -1151,13 +1152,6 @@
           });
 
           if (!response.ok) throw new Error('Update failed');
-
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              title: 'ใบสินเชื่อรอตรวจสอบ!',
-              message: `เลขที่ ${refCode} - ${customerName} ส่งงานแล้ว`
-            }));
-          }
 
           btnElement.innerHTML = '<i class="fas fa-check"></i> ส่งแล้ว';
           btnElement.disabled = true;

@@ -4,26 +4,36 @@ package handlers
 import (
 	"encoding/json"
 	"log"
+	"sync"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 )
 
-var clients = make(map[*websocket.Conn]bool)
-var broadcast = make(chan []byte)
-
-func init() {
-	go handleMessages()
+type wsClient struct {
+	conn    *websocket.Conn
+	staffID string
 }
 
-func handleMessages() {
-	for {
-		msg := <-broadcast
-		for client := range clients {
-			if err := client.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Println("WebSocket error:", err)
-				client.Close()
-				delete(clients, client)
+var (
+	wsClients   = make(map[*websocket.Conn]*wsClient)
+	wsClientsMu sync.Mutex
+)
+
+// BroadcastToStaff ส่ง notification เฉพาะ staff_id ที่ระบุ
+func BroadcastToStaff(staffID string, title string, message string) {
+	payload, _ := json.Marshal(map[string]string{
+		"title":   title,
+		"message": message,
+	})
+	wsClientsMu.Lock()
+	defer wsClientsMu.Unlock()
+	for conn, cl := range wsClients {
+		if cl.staffID == staffID {
+			if err := conn.WriteMessage(1, payload); err != nil {
+				log.Println("WebSocket send error:", err)
+				conn.Close()
+				delete(wsClients, conn)
 			}
 		}
 	}
@@ -39,22 +49,32 @@ func WsHandler(c *fiber.Ctx) error {
 func WsConnect(c *websocket.Conn) {
 	defer c.Close()
 
-	clients[c] = true
-	log.Printf("เชื่อมต่อแล้ว รวม %d คน", len(clients))
+	cl := &wsClient{conn: c}
+	wsClientsMu.Lock()
+	wsClients[c] = cl
+	wsClientsMu.Unlock()
+
+	log.Printf("WebSocket เชื่อมต่อ รวม %d คน", len(wsClients))
 
 	for {
 		mt, message, err := c.ReadMessage()
 		if err != nil || mt == websocket.CloseMessage {
-			delete(clients, c)
-			log.Printf("หลุดการเชื่อมต่อ เหลือ %d คน", len(clients))
+			wsClientsMu.Lock()
+			delete(wsClients, c)
+			wsClientsMu.Unlock()
+			log.Printf("WebSocket หลุด เหลือ %d คน", len(wsClients))
 			break
 		}
 
-		// เพิ่มบรรทัดนี้: รับข้อความแล้วกระจายต่อทันที!
+		// รับ {"type":"register","staff_id":"xxx"} จาก client เพื่อผูก staff_id
 		var data map[string]string
 		if json.Unmarshal(message, &data) == nil {
-			log.Printf("ได้รับแจ้งเตือนจากลูกค้า: %s - %s", data["title"], data["message"])
+			if data["type"] == "register" && data["staff_id"] != "" {
+				wsClientsMu.Lock()
+				cl.staffID = data["staff_id"]
+				wsClientsMu.Unlock()
+				log.Printf("WebSocket ลงทะเบียน staff_id: %s", cl.staffID)
+			}
 		}
-		broadcast <- message // ← สำคัญมาก! ส่งต่อให้ทุกคน
 	}
 }
