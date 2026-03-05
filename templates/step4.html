@@ -960,23 +960,21 @@
   <script>
 
 
-
-  </script>
-  </div>
-  <!-- End Container -->
-
-  <script>
     document.addEventListener("DOMContentLoaded", function () {
+      showLoading('กำลังโหลดข้อมูล...');
+
       const noGuarantorCheckbox = document.getElementById("no_guarantor");
       const guarantorFields = [
         "guarantor1_name", "guarantor1_contact",
         "guarantor2_name", "guarantor2_contact",
         "guarantor3_name", "guarantor3_contact"
       ];
+      const row2 = document.getElementById('row_guarantor2');
+      const row3 = document.getElementById('row_guarantor3');
+      const addBtn = document.getElementById('addGuarantorBtn');
 
       function toggleGuarantors() {
         if (!noGuarantorCheckbox) return;
-
         const isChecked = noGuarantorCheckbox.checked;
         guarantorFields.forEach(name => {
           const el = document.querySelector(`[name="${name}"]`);
@@ -985,117 +983,65 @@
             if (isChecked) {
               if (el.tagName === 'SELECT') el.selectedIndex = 0;
               else el.value = "";
-              el.classList.add('disabled-input'); // Add styling class if needed
+              el.classList.add('disabled-input');
             } else {
               el.classList.remove('disabled-input');
             }
           }
-          // Also disable search icons/containers if needed?
-          // For now just inputs.
         });
       }
 
-      if (noGuarantorCheckbox) {
-        noGuarantorCheckbox.addEventListener("change", toggleGuarantors);
-        toggleGuarantors(); // Run on load
-      }
-
-      // Logic for Add Guarantor Button
-      const row2 = document.getElementById('row_guarantor2');
-      const row3 = document.getElementById('row_guarantor3');
-      const addBtn = document.getElementById('addGuarantorBtn');
-
       function initGuarantorRows() {
-        if (!row2 || !row3) return;
-
-        // Check if they have values
+        if (!row2 || !row3 || !addBtn) return;
         const val2 = document.querySelector('[name="guarantor2_name"]').value.trim();
         const val3 = document.querySelector('[name="guarantor3_name"]').value.trim();
-
-        // Initial State
         if (val3 !== "") {
           row2.style.display = 'grid';
           row3.style.display = 'grid';
-          addBtn.style.display = 'none'; // Max reached
+          addBtn.style.setProperty('display', 'none', 'important');
         } else if (val2 !== "") {
           row2.style.display = 'grid';
           row3.style.display = 'none';
-          addBtn.style.display = 'flex';
+          addBtn.style.setProperty('display', 'flex', 'important');
         } else {
           row2.style.display = 'none';
           row3.style.display = 'none';
-          addBtn.style.display = 'flex';
+          addBtn.style.setProperty('display', 'flex', 'important');
         }
+        if (noGuarantorCheckbox && noGuarantorCheckbox.checked) {
+          addBtn.style.setProperty('display', 'none', 'important');
+        }
+      }
+
+      if (noGuarantorCheckbox) {
+        noGuarantorCheckbox.addEventListener('change', function () {
+          toggleGuarantors();
+          if (this.checked) {
+            if (addBtn) addBtn.style.setProperty('display', 'none', 'important');
+          } else {
+            initGuarantorRows();
+          }
+        });
+        toggleGuarantors();
       }
 
       if (addBtn) {
         addBtn.addEventListener('click', function () {
-          if (row2.style.display === 'none') {
+          if (row2 && row2.style.display === 'none') {
             row2.style.display = 'grid';
-          } else if (row3.style.display === 'none') {
+          } else if (row3 && row3.style.display === 'none') {
             row3.style.display = 'grid';
-            addBtn.style.display = 'none';
-          }
-        });
-
-        // Run init
-        initGuarantorRows();
-
-        // Hook into noGuarantor to hide/show button? 
-        // If "No Guarantor" is checked, maybe hide the button?
-        noGuarantorCheckbox.addEventListener('change', function () {
-          if (this.checked) {
-            addBtn.style.display = 'none';
-            // Also hide rows? Or just disable? Existing logic disables inputs.
-            // If we hide rows, we might lose context of "there are 3 disabled inputs".
-            // Let's keep rows as is (visible/hidden based on add) but disabled content.
-            // But button should be hidden.
-          } else {
-            // Restore button state?
-            initGuarantorRows();
-          }
-        });
-        // Initial check
-        if (noGuarantorCheckbox.checked) {
-          addBtn.style.display = 'none';
-        }
-      }
-
-    });
-  </script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      // Fix for Add Guarantor Button Visibility
-      // This overrides any previous broken logic
-      const addBtn = document.getElementById('addGuarantorBtn');
-      const noGuarantorCheckbox = document.getElementById("no_guarantor");
-
-      if (addBtn && noGuarantorCheckbox) {
-        function updateState() {
-          if (noGuarantorCheckbox.checked) {
             addBtn.style.setProperty('display', 'none', 'important');
-          } else {
-            addBtn.style.setProperty('display', 'flex', 'important');
           }
-        }
-        noGuarantorCheckbox.addEventListener('change', updateState);
-        // Run immediately to set correct state
-        setTimeout(updateState, 100); // Small delay to ensure other scripts finished
+        });
       }
-    });
-  </script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      showLoading('กำลังโหลดข้อมูล...');
 
-      // Auto-uncheck 'No Guarantor' if there are guarantors in the list
+      initGuarantorRows();
+
+      // Auto-uncheck 'No Guarantor' if guarantors already exist
       const guarantorCards = document.querySelectorAll('.guarantor-card');
-      const noGuarantorCheckbox = document.getElementById("no_guarantor");
-
       if (guarantorCards.length > 0 && noGuarantorCheckbox && noGuarantorCheckbox.checked) {
-        console.log("Guarantors exist, auto-unchecking 'No Guarantor'");
         noGuarantorCheckbox.checked = false;
-        // Dispatch event to ensure UI updates (enabling buttons etc)
         noGuarantorCheckbox.dispatchEvent(new Event('change'));
       }
 

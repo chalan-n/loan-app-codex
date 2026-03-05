@@ -1389,9 +1389,21 @@
         if (!input.files || input.files.length === 0) return;
 
         const file = input.files[0];
-        const loading = document.getElementById('uploadLoading');
 
-        // Show loading
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+          alert('ประเภทไฟล์ไม่รองรับ\nรองรับเฉพาะ JPG, PNG, WEBP, PDF เท่านั้น');
+          input.value = '';
+          return;
+        }
+        const maxSizeMB = 10;
+        if (file.size > maxSizeMB * 1024 * 1024) {
+          alert(`ไฟล์ขนาดใหญ่เกินไป\nขนาดสูงสุดที่อนุญาต: ${maxSizeMB} MB`);
+          input.value = '';
+          return;
+        }
+
+        const loading = document.getElementById('uploadLoading');
         loading.style.display = 'block';
 
         const formData = new FormData();
@@ -1405,16 +1417,16 @@
           .then(data => {
             loading.style.display = 'none';
             if (data.error) {
-              alert('Upload Failed: ' + data.error);
+              alert('อัปโหลดไม่สำเร็จ: ' + data.error);
             } else {
               addFileToList(data.filename);
-              input.value = ''; // Reset input
+              input.value = '';
             }
           })
           .catch(err => {
             loading.style.display = 'none';
             console.error(err);
-            alert('Upload Error');
+            alert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์');
           });
       }
 
@@ -1429,14 +1441,14 @@
           .then(res => res.json())
           .then(data => {
             if (data.error) {
-              alert('Delete Failed: ' + data.error);
+              alert('ลบไฟล์ไม่สำเร็จ: ' + data.error);
             } else {
               itemElement.remove();
             }
           })
           .catch(err => {
             console.error(err);
-            alert('Delete Error');
+            alert('เกิดข้อผิดพลาดในการลบไฟล์');
           });
       }
     </script>

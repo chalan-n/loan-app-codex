@@ -1258,7 +1258,6 @@
         }
         if (age < 0) age = 0;
       }
-      console.log("Calculated Age:", age);
 
       // Show Loading State
       const calcBtn = document.querySelector('button[onclick="calculateLifeInsurance()"]');
@@ -1268,7 +1267,6 @@
       document.getElementById('calculationResults').style.display = 'none';
 
       // Call API to get Rate
-      console.log('Calculating Insurance for LoanID:', loanID, 'Company:', company, 'Installments:', installments);
       fetch('/api/calculate-insurance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1282,19 +1280,6 @@
       })
         .then(res => res.json())
         .then(data => {
-          console.log('API Response:', data);
-          // DEBUG: Show data to console
-          console.group('Insurance Calculation Debug');
-          console.log('Rate:', data.rate);
-          console.log('Age:', data.debug_age);
-          console.log('Gender:', data.debug_gender);
-          console.log('LoanID:', data.debug_id);
-          console.log('SQL:', data.debug_sql);
-          console.groupEnd();
-
-          // DEBUG: Alert SQL as requested - REMOVED to prioritize Terminal/Console
-          //alert('SQL Command:\n' + data.debug_sql);
-
           if (data.error) {
             alert('Server Error: ' + data.error);
             calcBtn.textContent = originalText;
@@ -1304,7 +1289,6 @@
 
           const insuranceRate = parseFloat(data.rate) || 0;
           if (insuranceRate === 0) {
-            console.warn('Rate returned 0. Debug info:', data);
             alert('ไม่พบอัตราเบี้ยประกัน (Rate=0) กรุณาตรวจสอบข้อมูลนำเข้า');
           }
           document.getElementById('life_premium_rate').value = insuranceRate.toFixed(2);

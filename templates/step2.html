@@ -1759,57 +1759,6 @@
        =================================================== -->
   <script>
     /**
-     * handleOcrFile — ถูกเรียกเมื่อ MO เลือกรูปจาก camera / gallery
-     * ส่ง FormData ไปที่ /api/v1/ocr/vehicle แล้ว auto-fill ฟิลด์รถ
-     */
-    async function handleOcrFile(input) {
-      if (!input.files || !input.files[0]) return;
-
-      const file = input.files[0];
-      const overlay = document.getElementById('ocrOverlay');
-      const overlayMsg = document.getElementById('ocrOverlayMsg');
-
-      // ── แสดง Loading Overlay ──────────────────────────────────────
-      overlay.classList.add('show');
-      overlayMsg.textContent = '🤖 กำลังสแกนด้วย AI...';
-
-      try {
-        // ── ส่งรูปไปที่ Gemini OCR API ───────────────────────────────
-        const formData = new FormData();
-        formData.append('image', file);
-
-        const res = await fetch('/api/v1/ocr/vehicle', {
-          method: 'POST',
-          body: formData
-          // ไม่ set Content-Type เพื่อให้ browser จัดการ boundary ของ multipart เอง
-        });
-
-        const json = await res.json();
-
-        if (!res.ok || !json.success) {
-          throw new Error(json.message || json.error || 'API ตอบกลับผิดพลาด');
-        }
-
-        // ── Auto-fill ฟิลด์รถ ─────────────────────────────────────
-        overlayMsg.textContent = '✅ กำลังกรอกข้อมูล...';
-        fillVehicleFields(json.data);
-
-        // แสดง badge สำเร็จ
-        const badge = document.getElementById('ocrBadge');
-        const badgeText = document.getElementById('ocrBadgeText');
-        badgeText.textContent = `สแกนสำเร็จ — เลขตัวถัง ${json.data.chassis_number || '-'}`;
-        badge.classList.add('show');
-
-      } catch (err) {
-        alert('❌ สแกนไม่สำเร็จ: ' + err.message + '\n\nกรุณาถ่ายรูปใหม่ให้ชัดขึ้น');
-      } finally {
-        overlay.classList.remove('show');
-        // reset input เพื่อให้ onchange ยิงได้อีกครั้งถ้าถ่ายรูปซ้ำ
-        input.value = '';
-      }
-    }
-
-    /**
      * fillVehicleFields — นำ VehicleInfo JSON ไปใส่ใน input fields ต่างๆ
      * @param {Object} d - data จาก /api/v1/ocr/vehicle response
      */

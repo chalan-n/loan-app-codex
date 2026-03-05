@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-name" content="Kanit + Navy">
   <meta name="theme-color" content="#1e3a8a">
-  <title>สินเชื่อใหม่ - ผู้เช่าซื้อ</title>
+  <title>สินเชื่อใหม่ - เพิ่มผู้ค้ำประกัน</title>
   <!-- Google Font: Kanit -->
   <link rel="stylesheet" href="/static/css/kanit.css">
   <!-- Font Awesome -->
@@ -2615,8 +2615,8 @@
         if (!res.ok || !json.success) throw new Error(json.message || json.error || 'API error');
 
         const d = json.data;
-        const idNum = (d.id_number || '').replace(/\\D/g, '');
-        const idOk = /^\\d{13}$/.test(idNum) && validateIDChecksum(idNum);
+        const idNum = (d.id_number || '').replace(/\D/g, '');
+        const idOk = /^\d{13}$/.test(idNum) && validateIDChecksum(idNum);
 
         overlayMsg.textContent = '✅ กำลังกรอกข้อมูล...';
         fillGuarantorFields(d, idNum);
@@ -2796,7 +2796,7 @@
         text.textContent = '🔴 ภาพเบลอ (ห้ามถ่าย)';
         fill.style.background = 'linear-gradient(90deg,#ef4444,#f87171)';
       } else if (pct <= 70) {
-        text.textContent = '� กำลังโฟกัส...';
+        text.textContent = '🟡 กำลังโฟกัส...';
         fill.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)';
       } else {
         text.textContent = '🟢 ภาพชัดเจน (พร้อมถ่าย)';
