@@ -136,3 +136,6 @@ vendor/
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+
+# TLS self-signed certs (dev only)
+certs/
