@@ -1210,16 +1210,18 @@
             <div class="col">
               <label>วันออกบัตร :</label>
               <div class="input-group">
-                <input type="text" name="other_card_issue_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                  readonly value="{{ if .Loan.OtherCardIssueDate }}{{ .Loan.OtherCardIssueDate }}{{ end }}">
-                </div>
+                <input type="text" name="other_card_issue_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่" readonly
+                  value="{{ if .Loan.OtherCardIssueDate }}{{ .Loan.OtherCardIssueDate }}{{ end }}">
+              </div>
             </div>
             <div class="col">
               <label>วันบัตรหมดอายุ :</label>
               <div class="input-group">
-                <input type="text" name="other_card_expiry_date" class="datepicker-th date-input-icon no-keyboard" placeholder="เลือกวันที่"
-                  readonly value="{{ if .Loan.OtherCardExpiryDate }}{{ .Loan.OtherCardExpiryDate }}{{ end }}">
-                </div>
+                <input type="text" name="other_card_expiry_date" class="datepicker-th date-input-icon no-keyboard"
+                  placeholder="เลือกวันที่" readonly
+                  value="{{ if .Loan.OtherCardExpiryDate }}{{ .Loan.OtherCardExpiryDate }}{{ end }}">
+              </div>
             </div>
           </div>
 
@@ -1829,13 +1831,13 @@
 
       // flatpickr ".datepicker-th" จะ init โดย thai_datepicker.js (ไม่ init ซ้ำที่นี่)
       // hook onChange สำหรับ calculateAge หลัง thai_datepicker.js init เสร็จ
-      setTimeout(function() {
+      setTimeout(function () {
         const dobEl = document.getElementById('date_of_birth');
         if (dobEl && dobEl._flatpickr) {
           const fp = dobEl._flatpickr;
           const origOnChange = fp.config.onChange || [];
           fp.config.onChange = Array.isArray(origOnChange) ? origOnChange : [origOnChange];
-          fp.config.onChange.push(function(selectedDates, dateStr, instance) {
+          fp.config.onChange.push(function (selectedDates, dateStr, instance) {
             instance.element.value = dateStr;
             calculateAge();
           });
@@ -2002,7 +2004,14 @@
         .catch(error => console.error('Error loading title data:', error)));
 
       // Cascading Address Logic
-      let provinces = [], districts = [], subdistricts = [];
+      // expose ที่ window scope เพื่อให้ fillAddressCascading (OCR) เข้าถึงได้
+      window._addrProvinces = [];
+      window._addrDistricts = [];
+      window._addrSubdistricts = [];
+      // local aliases
+      let provinces = window._addrProvinces,
+        districts = window._addrDistricts,
+        subdistricts = window._addrSubdistricts;
 
       function setupAddressCascading(prefix) {
         const provinceSelect = document.querySelector(`select[name="${prefix}_province"]`);
@@ -2111,9 +2120,9 @@
       if (cachedData) {
         try {
           const { provinces: p, districts: d, subdistricts: s } = JSON.parse(cachedData);
-          provinces = p;
-          districts = d;
-          subdistricts = s;
+          provinces = window._addrProvinces = p;
+          districts = window._addrDistricts = d;
+          subdistricts = window._addrSubdistricts = s;
 
           if (updateHouseReg) updateHouseReg();
           if (updateCurrent) updateCurrent();
@@ -2139,9 +2148,9 @@
           fetch('/static/data/district.json').then(r => r.json()),
           fetch('/static/data/sub_districts.json').then(r => r.json())
         ]).then(([p, d, s]) => {
-          provinces = p;
-          districts = d;
-          subdistricts = s;
+          provinces = window._addrProvinces = p;
+          districts = window._addrDistricts = d;
+          subdistricts = window._addrSubdistricts = s;
 
           // Save cache
           localStorage.setItem('addressData_v2', JSON.stringify({ provinces: p, districts: d, subdistricts: s }));
@@ -2400,8 +2409,8 @@
       // ── วันเกิด → flatpickr readonly field ────────────────────────
       // Gemini ส่งมา DD/MM/YYYY (ค.ศ.) — แปลงเป็น พ.ศ. สำหรับ flatpickr
       console.log('[OCR DEBUG] date_of_birth:', JSON.stringify(d.date_of_birth),
-                  'issue_date:', JSON.stringify(d.issue_date),
-                  'expiry_date:', JSON.stringify(d.expiry_date));
+        'issue_date:', JSON.stringify(d.issue_date),
+        'expiry_date:', JSON.stringify(d.expiry_date));
       if (d.date_of_birth) setFlatpickrDate('#date_of_birth', d.date_of_birth);
 
       // ── วันออกบัตร / วันหมดอายุ ──────────────────────────────────
@@ -2413,10 +2422,87 @@
       setVal('[name="house_reg_moo"]', d.moo);
       setVal('[name="house_reg_soi"]', d.soi);
       setVal('[name="house_reg_road"]', d.road);
-      setVal('[name="house_reg_zipcode"]', d.zipcode);
-      setSelectText('[name="house_reg_province"]', d.province);
-      setSelectText('[name="house_reg_district"]', d.district);
-      setSelectText('[name="house_reg_subdistrict"]', d.subdistrict);
+
+      // ── จังหวัด → อำเภอ → ตำบล → รหัสไปรษณีย์ (Cascading) ────────
+      fillAddressCascading('house_reg', d.province, d.district, d.subdistrict, d.zipcode);
+    }
+
+    /**
+     * fillAddressCascading — เลือก province/district/subdistrict แบบ cascade
+     * พร้อม auto-fill zipcode เมื่อเลือก subdistrict ได้
+     * @param {string} prefix        - เช่น "house_reg"
+     * @param {string} provinceName  - ชื่อจังหวัดจาก OCR
+     * @param {string} districtName  - ชื่ออำเภอ/เขตจาก OCR
+     * @param {string} subdistrictName - ชื่อตำบล/แขวงจาก OCR
+     * @param {string} ocrZipcode    - รหัสไปรษณีย์จาก OCR (fallback)
+     */
+    function fillAddressCascading(prefix, provinceName, districtName, subdistrictName, ocrZipcode) {
+      const provinceSelect = document.querySelector(`[name="${prefix}_province"]`);
+      const districtSelect = document.querySelector(`[name="${prefix}_district"]`);
+      const subdistrictSelect = document.querySelector(`[name="${prefix}_subdistrict"]`);
+      const zipcodeInput = document.querySelector(`[name="${prefix}_zipcode"]`);
+
+      if (!provinceSelect) return;
+
+      // ── helper: fuzzy match ชื่อไทย (ตัดคำนำหน้า เช่น อำเภอ/เขต/ตำบล/แขวง) ──────
+      const norm = s => (s || '').trim().toLowerCase()
+        .replace(/^(อำเภอ|เขต|ตำบล|แขวง|จังหวัด)/u, '').trim();
+
+      const fuzzyFind = (arr, keyword) => {
+        const kw = norm(keyword);
+        if (!kw) return null;
+        // 1. exact match
+        let found = arr.find(x => norm(x.name_th) === kw);
+        // 2. starts-with
+        if (!found) found = arr.find(x => norm(x.name_th).startsWith(kw) || kw.startsWith(norm(x.name_th)));
+        // 3. includes
+        if (!found) found = arr.find(x => norm(x.name_th).includes(kw) || kw.includes(norm(x.name_th)));
+        return found || null;
+      };
+
+      const addrP = window._addrProvinces || [];
+      const addrD = window._addrDistricts || [];
+      const addrS = window._addrSubdistricts || [];
+
+      // ── Step 1: จังหวัด ──────────────────────────────────────────────
+      const prov = fuzzyFind(addrP, provinceName);
+      console.log('[OCR cascade] province search:', provinceName, '→', prov);
+      if (prov) {
+        provinceSelect.value = prov.id;
+        provinceSelect.dispatchEvent(new Event('change'));  // populate district options
+      }
+
+      // ── Step 2: อำเภอ/เขต ────────────────────────────────────────────
+      const provId = prov ? prov.id : null;
+      const distList = provId ? addrD.filter(d => d.province_id == provId) : addrD;
+      const dist = fuzzyFind(distList, districtName);
+      console.log('[OCR cascade] district search:', districtName, '→', dist);
+      if (dist && districtSelect) {
+        districtSelect.value = dist.id;
+        districtSelect.dispatchEvent(new Event('change'));  // populate subdistrict options
+      }
+
+      // ── Step 3: ตำบล/แขวง ────────────────────────────────────────────
+      const distId = dist ? dist.id : null;
+      const subList = distId ? addrS.filter(s => s.district_id == distId) : addrS;
+      const sub = fuzzyFind(subList, subdistrictName);
+      console.log('[OCR cascade] subdistrict search:', subdistrictName, '→', sub);
+      if (sub && subdistrictSelect) {
+        // หา option ที่ value == sub.id แล้ว select
+        const opt = Array.from(subdistrictSelect.options).find(o => o.value == sub.id);
+        if (opt) {
+          subdistrictSelect.value = sub.id;
+          subdistrictSelect.dispatchEvent(new Event('change'));  // auto-fill zipcode
+        } else if (zipcodeInput) {
+          // option ยังไม่ render → ใส่ zip โดยตรง
+          zipcodeInput.value = sub.zip_code || ocrZipcode || '';
+        }
+      }
+
+      // ── Step 4: Fallback zipcode จาก OCR ─────────────────────────────
+      if (ocrZipcode && zipcodeInput && !zipcodeInput.value) {
+        zipcodeInput.value = ocrZipcode;
+      }
     }
 
     /**
