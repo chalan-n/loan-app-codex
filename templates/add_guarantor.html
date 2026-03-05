@@ -1168,6 +1168,17 @@
       text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
       letter-spacing: 0.3px;
     }
+
+    .cam-btn-capture:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none !important;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .cam-btn-capture:disabled .cam-shutter {
+      background: rgba(255, 255, 255, 0.4);
+    }
   </style>
 </head>
 
@@ -1276,7 +1287,7 @@
         </div>
         <div class="cam-controls">
           <button type="button" class="cam-btn-close" onclick="closeCamOverlay()">✕ ยกเลิก</button>
-          <button type="button" class="cam-btn-capture" onclick="captureIdCard()"><span
+          <button type="button" class="cam-btn-capture" id="camCaptureBtn" onclick="captureIdCard()" disabled><span
               class="cam-shutter"></span></button>
           <button type="button" class="cam-btn-gallery"
             onclick="closeCamOverlay();document.getElementById('idcardFileInput').click();">🖼️ แกลเลอรี</button>
@@ -2777,12 +2788,24 @@
     }
     function updateSharpnessUI(score) {
       const fill = document.getElementById('sharpnessFill'), text = document.getElementById('sharpnessText');
+      const btn = document.getElementById('camCaptureBtn');
       if (!fill || !text) return;
       const pct = Math.min(100, Math.max(0, (score / 120) * 100));
       fill.style.width = pct + '%';
-      if (pct < 30) { text.textContent = '⚠️ ภาพเบลอ — กรุณาถือนิ่งๆ'; fill.style.background = 'linear-gradient(90deg,#ef4444,#f87171)'; }
-      else if (pct < 60) { text.textContent = '🔶 พอใช้ได้ — ลองปรับโฟกัส'; fill.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)'; }
-      else { text.textContent = '✅ ชัดดี! กดถ่ายรูปได้เลย'; fill.style.background = 'linear-gradient(90deg,#22c55e,#4ade80)'; }
+      if (pct <= 40) {
+        text.textContent = '🔴 ภาพเบลอ (ห้ามถ่าย)';
+        fill.style.background = 'linear-gradient(90deg,#ef4444,#f87171)';
+      } else if (pct <= 70) {
+        text.textContent = '� กำลังโฟกัส...';
+        fill.style.background = 'linear-gradient(90deg,#f59e0b,#fbbf24)';
+      } else {
+        text.textContent = '🟢 ภาพชัดเจน (พร้อมถ่าย)';
+        fill.style.background = 'linear-gradient(90deg,#22c55e,#4ade80)';
+      }
+      if (btn) {
+        btn.disabled = pct < 70;
+        btn.style.opacity = pct < 70 ? '0.4' : '1';
+      }
     }
   </script>
 </body>
