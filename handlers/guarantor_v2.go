@@ -1,14 +1,22 @@
 package handlers
 
 import (
-	"fmt"
+	"log"
+	"strconv"
+	"strings"
+
 	"loan-app/config"
 	"loan-app/models"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// parseMoney is used from guarantor.go since they are in the same package
+// parseMoney แปลง string ที่มี comma เป็น float64
+func parseMoney(amount string) float64 {
+	amount = strings.ReplaceAll(amount, ",", "")
+	val, _ := strconv.ParseFloat(amount, 64)
+	return val
+}
 
 // Helper to safely dereference string pointers
 func safeStr(s *string) string {
@@ -31,9 +39,7 @@ func AddGuarantorGetV2(c *fiber.Ctx) error {
 	var guarantor models.Guarantor
 
 	if guarantorID != "" {
-		if err := config.DB.First(&guarantor, guarantorID).Error; err != nil {
-			fmt.Printf("DEBUG: Guarantor not found for edit: %v\n", err)
-		} else {
+		if err := config.DB.First(&guarantor, guarantorID).Error; err == nil {
 			// Manually map fields to safe values
 			// General
 			guarantorData["ID"] = guarantor.ID
@@ -122,16 +128,12 @@ func AddGuarantorGetV2(c *fiber.Ctx) error {
 
 // AddGuarantorPostV2 - Renamed to force code refresh
 func AddGuarantorPostV2(c *fiber.Ctx) error {
-	fmt.Println("DEBUG: >>> ENTERING AddGuarantorPostV2 (If you see this, code IS updated) <<<")
-
 	// Parse loan_id directly
 	loanIDStr := c.FormValue("loan_id")
 	guarantorID := c.FormValue("guarantor_id")
 
 	if guarantorID != "" {
 		// UPDATE existing guarantor
-		fmt.Printf("DEBUG: Updating Guarantor ID: %s\n", guarantorID)
-
 		// Logic to pick the correct company name
 		var companyName string
 		if c.FormValue("guarantor_type") == "juristic" {
@@ -173,10 +175,9 @@ func AddGuarantorPostV2(c *fiber.Ctx) error {
 		).Error
 
 		if err != nil {
-			fmt.Printf("DEBUG: Error updating guarantor V2: %v\n", err)
+			log.Printf("[guarantor] error updating ID %s: %v", guarantorID, err)
 			return c.Status(500).SendString("Error updating guarantor (V2): " + err.Error())
 		}
-		fmt.Println("DEBUG: Successfully updated via Raw SQL V2")
 		return c.Redirect("/step4?id=" + loanIDStr)
 	}
 
@@ -236,18 +237,15 @@ func AddGuarantorPostV2(c *fiber.Ctx) error {
 	).Error
 
 	if err != nil {
-		fmt.Printf("DEBUG: Error executing raw SQL V2: %v\n", err)
+		log.Printf("[guarantor] error inserting: %v", err)
 		return c.Status(500).SendString("Error saving guarantor (V2): " + err.Error())
 	}
-	fmt.Println("DEBUG: Successfully inserted via Raw SQL V2")
 
 	// Update loan_applications to uncheck NoGuarantor
 	updateLoanSQL := "UPDATE loan_applications SET no_guarantor = false, last_update_date = NOW() WHERE id = ?"
 	if err := config.DB.Exec(updateLoanSQL, loanIDStr).Error; err != nil {
-		fmt.Printf("DEBUG: Failed to update loan no_guarantor: %v\n", err)
-		// Not a critical error, so we continue
+		log.Printf("[guarantor] error updating no_guarantor for loan %s: %v", loanIDStr, err)
 	}
-	fmt.Println("DEBUG: Successfully updated no_guarantor = false")
 
 	// Create model just to check ID for redirect (optional, or just use loanIDStr)
 	// Actually we can just redirect using loanIDStr
@@ -265,10 +263,9 @@ func DeleteGuarantor(c *fiber.Ctx) error {
 
 	// Delete from database
 	if err := config.DB.Exec("DELETE FROM loan_applications_guarantors WHERE id = ?", id).Error; err != nil {
-		fmt.Printf("DEBUG: Error deleting guarantor %s: %v\n", id, err)
+		log.Printf("[guarantor] error deleting ID %s: %v", id, err)
 		return c.Status(500).SendString("Error deleting guarantor")
 	}
 
-	fmt.Printf("DEBUG: Successfully deleted guarantor %s\n", id)
 	return c.Redirect("/step4?id=" + loanID)
 }
