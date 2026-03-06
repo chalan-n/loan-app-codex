@@ -12,6 +12,9 @@
   <link rel="stylesheet" href="/static/css/all.min.css">
   <link rel="stylesheet" href="/static/css/custom_loading.css">
   <script src="/static/js/custom_loading.js"></script>
+  <!-- Dexie.js for IndexedDB (offline drafts — hosted locally so it works on LAN) -->
+  <script src="/static/js/dexie.min.js"></script>
+  <script src="/static/js/draft-db.js"></script>
   <style>
     :root {
       --navy: #1e3a8a;
@@ -774,6 +777,44 @@
     @media (min-width: 900px) {
       /* Optional: keep sidebar hidden or make it permanent? user requested "slide menu", implies hidden by default or mobile friendly */
     }
+
+    /* === Pending Drafts Section === */
+    #pendingDraftsSection {
+      margin: 0 0 4px 0;
+      padding: 0 0 4px 0;
+    }
+    #pendingDraftsSection.hidden { display: none; }
+    .drafts-title {
+      font-size: 1rem; font-weight: 600; color: #92400e;
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 22px 10px;
+      border-bottom: 1px solid #fde68a;
+    }
+    .drafts-title i { font-size: 1.1rem; }
+    #draftsList { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .draft-card {
+      background: white; border: 1.5px solid #fde68a; border-radius: 12px;
+      padding: 14px 18px; display: flex; align-items: center;
+      justify-content: space-between; gap: 12px;
+      box-shadow: 0 2px 8px rgba(251,191,36,0.12); cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s; flex-wrap: wrap;
+    }
+    .draft-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(251,191,36,0.2); }
+    .draft-card-info { display: flex; align-items: center; gap: 10px; }
+    .draft-card-info i { color: #f59e0b; font-size: 1.3rem; flex-shrink: 0; }
+    .draft-card-title { font-weight: 600; color: #1e3a8a; font-size: 0.95rem; }
+    .draft-card-sub { font-size: 0.82rem; color: #6b7280; margin-top: 2px; }
+    .draft-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .draft-btn-resume {
+      background: #1e3a8a; color: white; border: none;
+      padding: 7px 16px; border-radius: 8px; font-family: 'Kanit', sans-serif;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer;
+    }
+    .draft-btn-discard {
+      background: #fee2e2; color: #dc2626; border: none;
+      padding: 7px 12px; border-radius: 8px; font-family: 'Kanit', sans-serif;
+      font-size: 0.88rem; cursor: pointer;
+    }
   </style>
 </head>
 
@@ -868,6 +909,16 @@
       </div>
       <span class="close-toast" onclick="this.parentElement.classList.remove('show')">&times;</span>
     </div>
+
+    <!-- ===== Pending Drafts Section ===== -->
+    <div id="pendingDraftsSection" class="hidden" style="background:#fffbeb;border-bottom:1px solid #fde68a;">
+      <div class="drafts-title">
+        <i class="fas fa-clock"></i> งานที่ยังค้างอยู่ (Draft)
+        <span id="draftsCount" style="background:#f59e0b;color:white;border-radius:50px;padding:1px 10px;font-size:0.8rem;">0</span>
+      </div>
+      <div id="draftsList"></div>
+    </div>
+    <!-- ========================= -->
 
     <div class="form-body">
 
@@ -1021,7 +1072,7 @@
 
     function updateNotifList() {
       const list = document.getElementById('notifList');
-      if (notifHistory.length === 0) {
+      if (!notifHistory.length) {
         list.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:40px;font-size:0.95rem;">ยังไม่มีแจ้งเตือน</div>';
         return;
       }
@@ -1151,7 +1202,7 @@
     // ปุ่มลบรายการ
     document.querySelectorAll('.btn-delete').forEach(btn => {
       btn.addEventListener('click', async function () {
-        if (!confirm('ยืนยันการลบรายการนี้ใช่หรือไม่? \n(ข้อมูลผู้กู้และผู้ค้ำประกันจะถูกลบทั้งหมด)')) return;
+        if (!confirm('ลบรายการนี้ออกหรือไม่? \n(ข้อมูลผู้กู้และผู้ค้ำประกันจะถูกลบทั้งหมด)')) return;
 
         const loanID = this.dataset.id; // Corrected: Use .ID for deletion, not RefCode
         try {
@@ -1174,6 +1225,92 @@
       });
     });
 
+  </script>
+
+  <script>
+    /* ── Pending Drafts Loader ───────────────────────────────────── */
+    (function () {
+      var STEP_LABELS = {
+        1: 'ขั้นตอนที่ 1 — ข้อมูลผู้เช่าซื้อ',
+        2: 'ขั้นตอนที่ 2 — ข้อมูลรถ',
+        3: 'ขั้นตอนที่ 3 — สัญญาเช่าซื้อ',
+        4: 'ขั้นตอนที่ 4 — ผู้ค้ำประกัน',
+        5: 'ขั้นตอนที่ 5 — ประกันชีวิต',
+        6: 'ขั้นตอนที่ 6 — ประกันภัย',
+        7: 'ขั้นตอนที่ 7 — หักภาษี ณ ที่จ่าย'
+      };
+
+      function padTwo(n) { return n < 10 ? '0' + n : '' + n; }
+      function fmtTime(ts) {
+        var d = new Date(ts);
+        return padTwo(d.getDate()) + '/' + padTwo(d.getMonth() + 1) + '/' + (d.getFullYear() + 543) +
+          ' ' + padTwo(d.getHours()) + ':' + padTwo(d.getMinutes());
+      }
+
+      function renderDrafts(drafts) {
+        var section = document.getElementById('pendingDraftsSection');
+        var list    = document.getElementById('draftsList');
+        var counter = document.getElementById('draftsCount');
+        if (!drafts.length) { section.classList.add('hidden'); return; }
+
+        section.classList.remove('hidden');
+        counter.textContent = drafts.length;
+        list.innerHTML = '';
+
+        drafts.forEach(function (d) {
+          var label = STEP_LABELS[d.step] || ('ขั้นตอนที่ ' + d.step);
+          var card = document.createElement('div');
+          card.className = 'draft-card';
+          card.innerHTML =
+            '<div class="draft-card-info">' +
+              '<i class="fas fa-file-alt"></i>' +
+              '<div>' +
+                '<div class="draft-card-title">' + label + '</div>' +
+                '<div class="draft-card-sub">รหัสสินเชื่อ: ' + (d.loan_id || '-') +
+                  ' &nbsp;|&nbsp; แก้ไขล่าสุด: ' + fmtTime(d.last_updated) + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="draft-card-actions">' +
+              '<button class="draft-btn-resume"><i class="fas fa-arrow-right"></i> ทำต่อ</button>' +
+              '<button class="draft-btn-discard"><i class="fas fa-trash"></i></button>' +
+            '</div>';
+
+          card.querySelector('.draft-btn-resume').addEventListener('click', function () {
+            document.cookie = 'loan_id=' + d.loan_id + '; path=/';
+            showLoading('กำลังโหลดข้อมูล...');
+            window.location.href = '/step' + d.step + '?id=' + d.loan_id;
+          });
+
+          card.querySelector('.draft-btn-discard').addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!confirm('ลบ Draft นี้ออกหรือไม่?')) return;
+            window.LoanDraftDB.drafts.delete(d.draft_id).then(function () {
+              localStorage.removeItem('draft_uuid:' + d.loan_id + ':' + d.step);
+              card.remove();
+              var remaining = list.querySelectorAll('.draft-card').length;
+              if (!remaining) section.classList.add('hidden');
+              else counter.textContent = remaining;
+            });
+          });
+
+          list.appendChild(card);
+        });
+      }
+
+      function loadDrafts() {
+        if (!window.LoanDraftDB) return;
+        window.LoanDraftDB.drafts
+          .orderBy('last_updated').reverse().toArray()
+          .then(renderDrafts)
+          .catch(function (e) { console.warn('[Drafts] load failed', e); });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadDrafts);
+      } else {
+        loadDrafts();
+      }
+    })();
   </script>
 
 </body>

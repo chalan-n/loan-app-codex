@@ -3235,12 +3235,17 @@
         highlightIDCardFields();
 
       } catch (err) {
-        alert('❌ สแกนบัตรไม่สำเร็จ: ' + err.message + '\n\nกรุณาถ่ายรูปให้ชัดขึ้น และให้เห็นเลข 13 หลักครบถ้วน');
+        alert(' สแกนบัตรไม่สำเร็จ: ' + err.message + '\n\nกรุณาถ่ายรูปให้ชัดขึ้น และให้เห็นเลข 13 หลักครบถ้วน');
       } finally {
         overlay.classList.remove('show');
       }
     }
   </script>
+  <!-- Offline Draft System -->
+  <script src="/static/js/dexie.min.js"></script>
+  <script src="/static/js/draft-db.js"></script>
+  <script src="/static/js/connectivity.js"></script>
+  <script src="/static/js/draft-autosave.js"></script>
 </body>
 
 </html>
