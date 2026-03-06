@@ -443,21 +443,23 @@
       content: '';
       position: absolute;
       top: 20px;
-      left: 50%;
-      width: 100%;
+      left: calc(50% + 20px);
+      right: calc(-50% + 20px);
       height: 4px;
       background: #d1d5db;
       z-index: 1;
-      transform: translateX(-50%);
       border-radius: 2px;
     }
 
-    .step.completed:not(:last-child)::after,
-    .step.active:not(:last-child)::after {
+    .step.completed:not(:last-child)::after {
       background: var(--blue);
-      animation: drawLine 1.2s ease-out forwards;
-      transform-origin: left;
+      transform-origin: left center;
       transform: scaleX(0);
+      animation: drawLine 1.2s ease-out forwards;
+    }
+
+    .step.active:not(:last-child)::after {
+      background: #d1d5db;
     }
 
     @keyframes drawLine {
