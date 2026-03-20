@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}} | CMO APP</title>
+  <link rel="stylesheet" href="/static/css/kanit.css">
+  <link rel="stylesheet" href="/static/css/all.min.css">
+  <style>
+    :root {
+      --navy: #1e3a8a;
+      --sky: #dbeafe;
+      --green: #059669;
+      --red: #dc2626;
+      --gray: #6b7280;
+      --light: #f8fafc;
+      --border: #e2e8f0;
+    }
+    
+    body {
+      font-family: 'Kanit', sans-serif;
+      background: #f0f9ff;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--navy), #1e40af);
+      color: white;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 1.8rem;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    
+    .btn-primary {
+      background: white;
+      color: var(--navy);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .content {
+      padding: 30px;
+    }
+    
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .table th {
+      background: var(--sky);
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--navy);
+      border-bottom: 2px solid var(--navy);
+    }
+    
+    .table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .table tr:hover {
+      background: #f8fafc;
+    }
+    
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    
+    .badge-admin {
+      background: #dc2626;
+      color: white;
+    }
+    
+    .badge-manager {
+      background: #d97706;
+      color: white;
+    }
+    
+    .badge-officer {
+      background: #059669;
+      color: white;
+    }
+    
+    .status-active {
+      color: var(--green);
+      font-weight: 600;
+    }
+    
+    .status-inactive {
+      color: var(--red);
+      font-weight: 600;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+    }
+    
+    .btn-edit {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .btn-delete {
+      background: #ef4444;
+      color: white;
+    }
+    
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+    
+    .modal-content {
+      position: relative;
+      background: white;
+      margin: 50px auto;
+      width: 90%;
+      max-width: 600px;
+      border-radius: 12px;
+      padding: 30px;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    
+    .modal-header h2 {
+      margin: 0;
+      color: var(--navy);
+    }
+    
+    .close {
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--gray);
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: 'Kanit', sans-serif;
+    }
+    
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .modal-footer {
+      margin-top: 20px;
+      text-align: right;
+    }
+    
+    .btn-cancel {
+      background: var(--gray);
+      color: white;
+      margin-right: 10px;
+    }
+    
+    .btn-save {
+      background: var(--green);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>👥 จัดการผู้ใช้งาน</h1>
+      <button class="btn btn-primary" onclick="openModal()">
+        <i class="fas fa-plus"></i> เพิ่มผู้ใช้ใหม่
+      </button>
+    </div>
+    
+    <div class="content">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>รหัสพนักงาน</th>
+            <th>ชื่อ-นามสกุล</th>
+            <th>อีเมล</th>
+            <th>เบอร์โทร</th>
+            <th>บทบาท</th>
+            <th>สถานะ</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Users}}
+          <tr>
+            <td>{{.Username}}</td>
+            <td>{{.FullName}}</td>
+            <td>{{.Email}}</td>
+            <td>{{.Phone}}</td>
+            <td>
+              {{range .Roles}}
+                <span class="badge badge-{{.Name}}">{{.Name}}</span>
+              {{end}}
+            </td>
+            <td>
+              {{if .IsActive}}
+                <span class="status-active">✓ ใช้งาน</span>
+              {{else}}
+                <span class="status-inactive">✗ ระงับ</span>
+              {{end}}
+            </td>
+            <td>
+              <div class="actions">
+                <button class="btn btn-sm btn-edit" onclick="editUser({{.ID}})">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-delete" onclick="deleteUser({{.ID}})">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Modal สำหรับเพิ่ม/แก้ไขผู้ใช้ -->
+  <div id="userModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">เพิ่มผู้ใช้ใหม่</h2>
+        <span class="close" onclick="closeModal()">&times;</span>
+      </div>
+      
+      <form id="userForm">
+        <input type="hidden" id="userId" name="id">
+        
+        <div class="form-group">
+          <label>รหัสพนักงาน *</label>
+          <input type="text" id="username" name="username" required maxlength="6">
+        </div>
+        
+        <div class="form-group">
+          <label>รหัสผ่าน *</label>
+          <input type="password" id="password" name="password" placeholder="ปล่อยว่างถ้าไม่เปลี่ยน">
+        </div>
+        
+        <div class="form-group">
+          <label>ชื่อ-นามสกุล *</label>
+          <input type="text" id="full_name" name="full_name" required>
+        </div>
+        
+        <div class="form-group">
+          <label>อีเมล</label>
+          <input type="email" id="email" name="email">
+        </div>
+        
+        <div class="form-group">
+          <label>เบอร์โทร</label>
+          <input type="tel" id="phone" name="phone">
+        </div>
+        
+        <div class="form-group">
+          <label>บทบาท *</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="role_admin" name="role_ids" value="1">
+              <label for="role_admin">Admin</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="role_manager" name="role_ids" value="2">
+              <label for="role_manager">Manager</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="role_officer" name="role_ids" value="3">
+              <label for="role_officer">Officer</label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <div class="checkbox-item">
+            <input type="checkbox" id="is_active" name="is_active" value="true" checked>
+            <label for="is_active">ใช้งาน</label>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-cancel" onclick="closeModal()">ยกเลิก</button>
+          <button type="submit" class="btn btn-save">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <script>
+    let editingUserId = null;
+    
+    function openModal(userId = null) {
+      editingUserId = userId;
+      const modal = document.getElementById('userModal');
+      const form = document.getElementById('userForm');
+      
+      if (userId) {
+        // แก้ไขผู้ใช้
+        document.getElementById('modalTitle').textContent = 'แก้ไขผู้ใช้';
+        // TODO: โหลดข้อมูลผู้ใช้จาก API
+      } else {
+        // เพิ่มผู้ใช้ใหม่
+        document.getElementById('modalTitle').textContent = 'เพิ่มผู้ใช้ใหม่';
+        form.reset();
+      }
+      
+      modal.style.display = 'block';
+    }
+    
+    function closeModal() {
+      document.getElementById('userModal').style.display = 'none';
+      document.getElementById('userForm').reset();
+      editingUserId = null;
+    }
+    
+    function editUser(userId) {
+      openModal(userId);
+    }
+    
+    function deleteUser(userId) {
+      if (confirm('คุณต้องการลบผู้ใช้นี้ใช่หรือไม่?')) {
+        // TODO: เรียก API ลบผู้ใช้
+        fetch(`/api/users/${userId}`, { method: 'DELETE' })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              location.reload();
+            } else {
+              alert(data.message);
+            }
+          });
+      }
+    }
+    
+    // จัดการฟอร์ม submit
+    document.getElementById('userForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(this);
+      const url = editingUserId ? `/api/users/${editingUserId}` : '/api/users';
+      const method = editingUserId ? 'PUT' : 'POST';
+      
+      fetch(url, {
+        method: method,
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert(data.message);
+        }
+      });
+    });
+    
+    // ปิด modal เมื่อคลิกนอกพื้นที่
+    window.onclick = function(event) {
+      const modal = document.getElementById('userModal');
+      if (event.target == modal) {
+        closeModal();
+      }
+    }
+  </script>
+</body>
+</html>

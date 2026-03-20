@@ -76,4 +76,16 @@ func Setup(app *fiber.App) {
 	app.Get("/add-guarantor", handlers.AddGuarantorGetV2)
 	app.Post("/add-guarantor", idem, handlers.AddGuarantorPostV2)
 	app.Post("/delete-guarantor", handlers.DeleteGuarantor)
+
+	// User Management (RBAC)
+	app.Get("/users", middleware.RequirePermission("manage_users"), handlers.UsersPage)
+	app.Post("/api/users", middleware.RequirePermission("manage_users"), handlers.CreateUser)
+	app.Put("/api/users/:id", middleware.RequirePermission("manage_users"), handlers.UpdateUser)
+	app.Delete("/api/users/:id", middleware.RequirePermission("manage_users"), handlers.DeleteUser)
+
+	// Role Management
+	app.Get("/roles", middleware.RequirePermission("manage_roles"), handlers.RolesPage)
+	app.Post("/api/roles", middleware.RequirePermission("manage_roles"), handlers.CreateRole)
+	app.Put("/api/roles/:id", middleware.RequirePermission("manage_roles"), handlers.UpdateRole)
+	app.Delete("/api/roles/:id", middleware.RequirePermission("manage_roles"), handlers.DeleteRole)
 }
