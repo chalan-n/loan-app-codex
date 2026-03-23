@@ -425,8 +425,11 @@
   <script>
     /* ── WebAuthn Biometric Login (Usernameless) ─────────────────── */
     (function () {
-      var btn     = document.getElementById('btnBiometric');
-      var divider = document.getElementById('biometricDivider');
+      var btn        = document.getElementById('btnBiometric');
+      var divider    = document.getElementById('biometricDivider');
+      var usernameEl = document.getElementById('username');
+      var platformOK = false;
+      var checkTimer = null;
 
       // ตรวจสอบว่า browser รองรับ WebAuthn
       if (!window.PublicKeyCredential) return;
@@ -434,12 +437,50 @@
       // ตรวจว่า device รองรับ platform authenticator (fingerprint/face)
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
         .then(function (available) {
+          platformOK = available;
           if (available) {
-            divider.style.display = '';
-            btn.style.display = '';
+            // ตรวจ username ที่อาจ autofill อยู่แล้ว
+            checkAndShowBiometric();
           }
         })
         .catch(function () {});
+
+      // ฟัง input event ของ username
+      usernameEl.addEventListener('input', function () {
+        clearTimeout(checkTimer);
+        var val = usernameEl.value.trim();
+        if (!platformOK || val.length !== 6) {
+          hideBiometric();
+          return;
+        }
+        // debounce 300ms กัน call ซ้ำเกิน
+        checkTimer = setTimeout(checkAndShowBiometric, 300);
+      });
+
+      function checkAndShowBiometric() {
+        var val = usernameEl.value.trim();
+        if (!platformOK || val.length !== 6) { hideBiometric(); return; }
+        fetch('/webauthn/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: val })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.has_credential) {
+              divider.style.display = '';
+              btn.style.display = '';
+            } else {
+              hideBiometric();
+            }
+          })
+          .catch(function () { hideBiometric(); });
+      }
+
+      function hideBiometric() {
+        btn.style.display = 'none';
+        divider.style.display = 'none';
+      }
 
       btn.addEventListener('click', async function () {
 

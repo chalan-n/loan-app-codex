@@ -88,6 +88,25 @@ func loadWebAuthnUser(username string) (*webAuthnUser, error) {
 	return &webAuthnUser{user: user, creds: creds}, nil
 }
 
+// ── Check: มี credential หรือไม่ (ไม่ต้อง login) ───────────────────────────
+// POST /webauthn/check  body: {"username":"570639"}
+func WebAuthnCheck(c *fiber.Ctx) error {
+	type Req struct {
+		Username string `json:"username"`
+	}
+	var req Req
+	if err := c.BodyParser(&req); err != nil || req.Username == "" {
+		return c.JSON(fiber.Map{"has_credential": false})
+	}
+	var user models.User
+	if err := config.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		return c.JSON(fiber.Map{"has_credential": false})
+	}
+	var count int64
+	config.DB.Model(&models.WebAuthnCredential{}).Where("user_id = ?", user.ID).Count(&count)
+	return c.JSON(fiber.Map{"has_credential": count > 0})
+}
+
 // webAuthnReady ตรวจสอบว่า WebAuthn instance พร้อมใช้งาน
 func webAuthnReady(c *fiber.Ctx) bool {
 	if WebAuthn == nil {

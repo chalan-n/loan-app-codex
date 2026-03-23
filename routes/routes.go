@@ -22,6 +22,7 @@ func Setup(app *fiber.App) {
 	// WebAuthn login routes — ต้องอยู่ก่อน AuthMiddleware (ผู้ใช้ยังไม่ได้ login)
 	app.Post("/webauthn/login/begin", handlers.WebAuthnLoginBegin)
 	app.Post("/webauthn/login/finish", handlers.WebAuthnLoginFinish)
+	app.Post("/webauthn/check", handlers.WebAuthnCheck)
 
 	app.Use(handlers.AuthMiddleware)
 
