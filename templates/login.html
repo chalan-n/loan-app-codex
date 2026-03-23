@@ -399,12 +399,9 @@
 
       <!-- Biometric Login -->
       <div class="divider" id="biometricDivider" style="display:none;">หรือ</div>
-      <button type="button" class="btn-biometric hidden" id="btnBiometric" style="display:none;">
-        <i class="fas fa-fingerprint"></i> เข้าสู่ระบบด้วย Biometric
+      <button type="button" class="btn-biometric" id="btnBiometric" style="display:none;">
+        <i class="fas fa-fingerprint"></i> แสกนใบหน้า / ลายนิ้วมือ
       </button>
-      <p id="biometricHint" style="text-align:center;font-size:0.85rem;color:#94a3b8;margin-top:10px;display:none;">
-        กรอกรหัสพนักงาน 6 หลัก แล้วกดปุ่ม Biometric
-      </p>
 
       <div class="extra-links">
         <a href="#">ลืมรหัสผ่าน?</a>
@@ -426,12 +423,10 @@
   </div>
 
   <script>
-    /* ── WebAuthn Biometric Login ─────────────────────────────── */
+    /* ── WebAuthn Biometric Login (Usernameless) ─────────────────── */
     (function () {
-      var btn      = document.getElementById('btnBiometric');
-      var divider  = document.getElementById('biometricDivider');
-      var hint     = document.getElementById('biometricHint');
-      var platformOK = false;
+      var btn     = document.getElementById('btnBiometric');
+      var divider = document.getElementById('biometricDivider');
 
       // ตรวจสอบว่า browser รองรับ WebAuthn
       if (!window.PublicKeyCredential) return;
@@ -439,46 +434,23 @@
       // ตรวจว่า device รองรับ platform authenticator (fingerprint/face)
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
         .then(function (available) {
-          platformOK = available;
           if (available) {
-            // แสดง divider และ hint เสมอ แต่ปุ่มรอ username ครบ 6 หลัก
             divider.style.display = '';
-            hint.style.display = '';
-            // ตรวจ username ปัจจุบันทันที (กรณี autofill)
-            updateBiometricBtn();
+            btn.style.display = '';
           }
         })
         .catch(function () {});
 
-      // ฟัง username input → แสดง/ซ่อนปุ่ม biometric
-      document.getElementById('username').addEventListener('input', function () {
-        if (platformOK) updateBiometricBtn();
-      });
-
-      function updateBiometricBtn() {
-        var val = document.getElementById('username').value.trim();
-        if (val.length === 6) {
-          btn.style.display = '';
-          btn.classList.remove('hidden');
-          hint.style.display = 'none';
-        } else {
-          btn.style.display = 'none';
-          hint.style.display = divider.style.display === '' ? '' : 'none';
-        }
-      }
-
       btn.addEventListener('click', async function () {
-        var usernameVal = document.getElementById('username').value.trim();
 
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังยืนยันตัวตน...';
 
         try {
-          // 1. Begin
+          // 1. Begin (Usernameless — ไม่ต้องส่ง username)
           var beginRes = await fetch('/webauthn/login/begin', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: usernameVal })
+            headers: { 'Content-Type': 'application/json' }
           });
           if (!beginRes.ok) {
             var err = await beginRes.json();

@@ -109,7 +109,14 @@ func WebAuthnRegisterBegin(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "ไม่พบผู้ใช้"})
 	}
 
-	options, sessionData, err := WebAuthn.BeginRegistration(waUser)
+	// ใช้ ResidentKey=Required เพื่อสร้าง Discoverable Credential (usernameless login)
+	options, sessionData, err := WebAuthn.BeginRegistration(waUser,
+		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
+		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
+			ResidentKey:      protocol.ResidentKeyRequirementRequired,
+			UserVerification: protocol.VerificationRequired,
+		}),
+	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "เริ่มลงทะเบียนไม่สำเร็จ: " + err.Error()})
 	}
@@ -201,43 +208,27 @@ func WebAuthnRegisterFinish(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "ลงทะเบียนสำเร็จ"})
 }
 
-// ── Login: Begin ─────────────────────────────────────────────────────────────
-// POST /webauthn/login/begin  body: {"username": "570639"}
+// ── Login: Begin (Usernameless / Discoverable Credential) ───────────────────
+// POST /webauthn/login/begin  (no body needed)
 func WebAuthnLoginBegin(c *fiber.Ctx) error {
 	if !webAuthnReady(c) {
 		return nil
 	}
-	type Req struct {
-		Username string `json:"username"`
-	}
-	var req Req
-	if err := c.BodyParser(&req); err != nil || req.Username == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "กรุณาระบุ username"})
-	}
 
-	waUser, err := loadWebAuthnUser(req.Username)
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "ไม่พบผู้ใช้"})
-	}
-	if len(waUser.creds) == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "ยังไม่ได้ลงทะเบียน biometric"})
-	}
-
-	options, sessionData, err := WebAuthn.BeginLogin(waUser)
+	// Usernameless: ไม่ระบุ user ไม่ระบุ allowCredentials
+	// browser จะ discover credential บนอุปกรณ์เองและส่ง userHandle กลับมา
+	options, sessionData, err := WebAuthn.BeginDiscoverableLogin(
+		webauthn.WithUserVerification(protocol.VerificationRequired),
+	)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "เริ่ม login ไม่สำเร็จ: " + err.Error()})
 	}
 
-	// เก็บ sessionData + username ใน cookie
-	type loginSession struct {
-		Username    string               `json:"username"`
-		SessionData webauthn.SessionData `json:"session_data"`
-	}
-	ls := loginSession{Username: req.Username, SessionData: *sessionData}
-	lsJSON, _ := json.Marshal(ls)
+	// เก็บเฉพาะ sessionData (ไม่มี username)
+	sdJSON, _ := json.Marshal(sessionData)
 	c.Cookie(&fiber.Cookie{
 		Name:     "wa_login_session",
-		Value:    base64.StdEncoding.EncodeToString(lsJSON),
+		Value:    base64.StdEncoding.EncodeToString(sdJSON),
 		HTTPOnly: true,
 		Path:     "/",
 		MaxAge:   300,
@@ -246,34 +237,24 @@ func WebAuthnLoginBegin(c *fiber.Ctx) error {
 	return c.JSON(options)
 }
 
-// ── Login: Finish ─────────────────────────────────────────────────────────────
+// ── Login: Finish (Usernameless) ─────────────────────────────────────────────
 // POST /webauthn/login/finish
 func WebAuthnLoginFinish(c *fiber.Ctx) error {
 	if !webAuthnReady(c) {
 		return nil
 	}
-	// กู้คืน session
+	// กู้คืน sessionData
 	sessionCookie := c.Cookies("wa_login_session")
 	if sessionCookie == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "session หมดอายุ กรุณาลองใหม่"})
 	}
-	lsJSON, err := base64.StdEncoding.DecodeString(sessionCookie)
+	sdJSON, err := base64.StdEncoding.DecodeString(sessionCookie)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "session ไม่ถูกต้อง"})
 	}
-
-	type loginSession struct {
-		Username    string               `json:"username"`
-		SessionData webauthn.SessionData `json:"session_data"`
-	}
-	var ls loginSession
-	if err := json.Unmarshal(lsJSON, &ls); err != nil {
+	var sessionData webauthn.SessionData
+	if err := json.Unmarshal(sdJSON, &sessionData); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "session ไม่ถูกต้อง"})
-	}
-
-	waUser, err := loadWebAuthnUser(ls.Username)
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "ไม่พบผู้ใช้"})
 	}
 
 	bodyReader := strings.NewReader(string(c.Body()))
@@ -282,7 +263,32 @@ func WebAuthnLoginFinish(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "ข้อมูลไม่ถูกต้อง: " + err.Error()})
 	}
 
-	credential, err := WebAuthn.ValidateLogin(waUser, ls.SessionData, parsedResponse)
+	// Discoverable login: ใช้ userHandler เพื่อหา user จาก userHandle ใน assertion
+	var resolvedUser *webAuthnUser
+	credential, err := WebAuthn.ValidateDiscoverableLogin(
+		func(rawID, userHandle []byte) (webauthn.User, error) {
+			// userHandle คือ WebAuthnID (8 bytes big-endian ของ user.ID)
+			if len(userHandle) < 8 {
+				return nil, fiber.ErrUnauthorized
+			}
+			var uid uint64
+			for i := 0; i < 8; i++ {
+				uid = (uid << 8) | uint64(userHandle[i])
+			}
+			var user models.User
+			if err := config.DB.First(&user, uid).Error; err != nil {
+				return nil, fiber.ErrUnauthorized
+			}
+			waUser, err := loadWebAuthnUser(user.Username)
+			if err != nil {
+				return nil, fiber.ErrUnauthorized
+			}
+			resolvedUser = waUser
+			return waUser, nil
+		},
+		sessionData,
+		parsedResponse,
+	)
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"error": "ยืนยันตัวตนไม่สำเร็จ: " + err.Error()})
 	}
@@ -290,12 +296,11 @@ func WebAuthnLoginFinish(c *fiber.Ctx) error {
 	// อัปเดต SignCount
 	credIDStr := base64.RawURLEncoding.EncodeToString(credential.ID)
 	config.DB.Model(&models.WebAuthnCredential{}).
-		Where("user_id = ? AND credential_id = ?", waUser.user.ID, credIDStr).
+		Where("user_id = ? AND credential_id = ?", resolvedUser.user.ID, credIDStr).
 		Update("sign_count", credential.Authenticator.SignCount)
 
-	// สร้าง JWT เหมือน LoginPost
 	c.ClearCookie("wa_login_session")
-	tokenStr, err := createJWTToken(ls.Username)
+	tokenStr, err := createJWTToken(resolvedUser.user.Username)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "สร้าง token ไม่สำเร็จ"})
 	}
@@ -307,7 +312,7 @@ func WebAuthnLoginFinish(c *fiber.Ctx) error {
 		Path:     "/",
 	})
 
-	WriteAuditAs(c, ls.Username, "login_biometric", "", "เข้าสู่ระบบด้วย biometric สำเร็จ")
+	WriteAuditAs(c, resolvedUser.user.Username, "login_biometric", "", "เข้าสู่ระบบด้วย biometric สำเร็จ")
 	return c.JSON(fiber.Map{"success": true, "redirect": "/main"})
 }
 
