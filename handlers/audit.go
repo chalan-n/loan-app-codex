@@ -8,9 +8,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// WriteAudit บันทึก audit log ทุกครั้งที่มีการกระทำสำคัญ
+// WriteAudit บันทึก audit log ทุกครั้งที่มีการกระทำสำคัญ (อ่าน username จาก JWT cookie)
 func WriteAudit(c *fiber.Ctx, action, refCode, detail string) {
 	username := parseJWTUsername(c.Cookies("token"))
+	writeAuditWithUsername(c, username, action, refCode, detail)
+}
+
+// WriteAuditAs บันทึก audit log โดยระบุ username โดยตรง (ใช้กรณี cookie ยังไม่ถูก set เช่น login)
+func WriteAuditAs(c *fiber.Ctx, username, action, refCode, detail string) {
+	writeAuditWithUsername(c, username, action, refCode, detail)
+}
+
+func writeAuditWithUsername(c *fiber.Ctx, username, action, refCode, detail string) {
 	role := getUserRole(username)
 	ip := c.IP()
 	ua := c.Get("User-Agent")

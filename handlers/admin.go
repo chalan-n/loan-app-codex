@@ -41,13 +41,13 @@ func AuditLogPage(c *fiber.Ctx) error {
 	totalPages := int((total + int64(limit) - 1) / int64(limit))
 
 	return c.Render("admin_audit", fiber.Map{
-		"Logs":        logs,
-		"Page":        page,
-		"TotalPages":  totalPages,
-		"Total":       total,
+		"Logs":           logs,
+		"Page":           page,
+		"TotalPages":     totalPages,
+		"Total":          total,
 		"FilterAction":   action,
 		"FilterUsername": username,
-		"CurrentRole": GetCurrentUserRole(c),
+		"CurrentRole":    GetCurrentUserRole(c),
 	})
 }
 
@@ -137,7 +137,9 @@ func AdminDeleteUser(c *fiber.Ctx) error {
 	if err := config.DB.First(&user, req.UserID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "ไม่พบ user"})
 	}
-	config.DB.Delete(&models.User{}, req.UserID)
+	if err := config.DB.Delete(&models.User{}, req.UserID).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "ลบ user ไม่สำเร็จ"})
+	}
 	WriteAudit(c, "delete_user", "", "username="+user.Username)
 	return c.JSON(fiber.Map{"success": true})
 }

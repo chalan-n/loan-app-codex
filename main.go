@@ -138,7 +138,8 @@ func main() {
 		}
 		fmt.Println("║                                                   ║")
 		fmt.Println("║  ⚠️  Tablet: ยอมรับ cert แล้วเปิดกล้องได้          ║")
-		fmt.Println("╚═══════════════════════════════════════════════════╝\n")
+		fmt.Println("╚═══════════════════════════════════════════════════╝")
+		fmt.Println()
 		log.Fatal(app.ListenTLS("0.0.0.0:3000", cert, key))
 	}
 }
