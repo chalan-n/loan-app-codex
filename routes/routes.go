@@ -19,6 +19,10 @@ func Setup(app *fiber.App) {
 	// Mobile App API — protected by API Key (not cookie)
 	app.Post("/api/update-status", handlers.MobileAPIKeyMiddleware, handlers.UpdateStatus)
 
+	// WebAuthn login routes — ต้องอยู่ก่อน AuthMiddleware (ผู้ใช้ยังไม่ได้ login)
+	app.Post("/webauthn/login/begin", handlers.WebAuthnLoginBegin)
+	app.Post("/webauthn/login/finish", handlers.WebAuthnLoginFinish)
+
 	app.Use(handlers.AuthMiddleware)
 
 	app.Get("/change-password", handlers.ChangePasswordPage)
@@ -77,9 +81,7 @@ func Setup(app *fiber.App) {
 	app.Post("/add-guarantor", idem, handlers.AddGuarantorPostV2)
 	app.Post("/delete-guarantor", handlers.DeleteGuarantor)
 
-	// WebAuthn — biometric login/register
-	app.Post("/webauthn/login/begin", handlers.WebAuthnLoginBegin)
-	app.Post("/webauthn/login/finish", handlers.WebAuthnLoginFinish)
+	// WebAuthn — biometric register (ต้อง login แล้ว) + credentials management
 	app.Post("/webauthn/register/begin", handlers.WebAuthnRegisterBegin)
 	app.Post("/webauthn/register/finish", handlers.WebAuthnRegisterFinish)
 	app.Get("/webauthn/credentials", handlers.WebAuthnListCredentials)
