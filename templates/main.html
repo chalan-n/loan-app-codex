@@ -1233,6 +1233,13 @@
   </script>
 
   <script>
+    /* ── Loan ID → RefCode lookup (injected from server) ─────────── */
+    var LOAN_REF_MAP = {
+      {{- range .Loans }}{{ .ID }}: '{{ .RefCode }}',{{ end }}
+    };
+  </script>
+
+  <script>
     /* ── Pending Drafts Loader ───────────────────────────────────── */
     (function () {
       var STEP_LABELS = {
@@ -1271,7 +1278,7 @@
               '<i class="fas fa-file-alt"></i>' +
               '<div>' +
                 '<div class="draft-card-title">' + label + '</div>' +
-                '<div class="draft-card-sub">รหัสสินเชื่อ: ' + (d.loan_id || '-') +
+                '<div class="draft-card-sub">เลขใบคำขอ: ' + (window.LOAN_REF_MAP && window.LOAN_REF_MAP[d.loan_id] ? window.LOAN_REF_MAP[d.loan_id] : (d.loan_id || '-')) +
                   ' &nbsp;|&nbsp; แก้ไขล่าสุด: ' + fmtTime(d.last_updated) + '</div>' +
               '</div>' +
             '</div>' +
