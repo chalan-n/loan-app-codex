@@ -849,7 +849,7 @@
       <li><a href="/admin/users"><i class="fas fa-users-cog"></i> จัดการ User</a></li>
       <li><a href="/admin/audit"><i class="fas fa-history"></i> Audit Log</a></li>
       {{end}}
-      <li><a href="/webauthn/register"><i class="fas fa-fingerprint"></i> ลงทะเบียนแสกนใบหน้า/นิ้วมือ</a></li>
+      <li id="menuBiometric" style="display:none;"><a href="/webauthn/register"><i class="fas fa-fingerprint"></i> ลงทะเบียนแสกนใบหน้า/นิ้วมือ</a></li>
       <li><a href="/change-password"><i class="fas fa-key"></i> เปลี่ยนรหัสผ่าน</a></li>
       <li><a href="#" onclick="confirmLogout(event)" style="color:var(--red);"><i class="fas fa-sign-out-alt"
             style="color:var(--red);"></i> ออกจากระบบ</a></li>
@@ -1326,6 +1326,15 @@
     })();
   </script>
 
+  <script>
+    if (window.PublicKeyCredential) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then(function (ok) {
+          if (ok) document.getElementById('menuBiometric').style.display = '';
+        })
+        .catch(function () {});
+    }
+  </script>
 </body>
 
 </html>
