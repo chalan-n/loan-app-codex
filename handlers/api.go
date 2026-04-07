@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"fmt"
@@ -54,7 +54,7 @@ type CalculateInsuranceReq struct {
 	InsuranceCompany string `json:"insurance_company"`
 	Installments     uint   `json:"installments"`
 	Age              int    `json:"age"`                // Optional: If provided, usage overrides calculation
-	ContractSignDate string `json:"contract_sign_date"` // วันที่เซ็นสัญญาจากฟอร์ม
+	ContractSignDate string `json:"contract_sign_date"` // Contract sign date from the form
 }
 
 func CalculateInsuranceRate(c *fiber.Ctx) error {
@@ -63,11 +63,16 @@ func CalculateInsuranceRate(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, req.LoanID).Error; err != nil {
-		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
+	loan, err := requireLoanAccess(c, req.LoanID)
+	if err != nil {
+		if err == fiber.ErrForbidden {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
+		if err == fiber.ErrNotFound {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
+		}
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-
 	// 1. Gender: Male=1, Female=2
 	genderCode := 0
 	if loan.Gender == "male" {
@@ -79,16 +84,16 @@ func CalculateInsuranceRate(c *fiber.Ctx) error {
 	// 2. Age Calculation
 	var age int
 	var signDate time.Time
-	var err error
+	var parseErr error
 
-	// Priority: 1. req.ContractSignDate (ฟอร์ม) → 2. loan.ContractSignDate (DB) → 3. time.Now()
+	// Priority: req.ContractSignDate (form) -> loan.ContractSignDate (DB) -> time.Now()
 	if req.ContractSignDate != "" {
-		// ลองแปลงหลายรูปแบบจาก Frontend
+		// Accept multiple date formats sent by the frontend.
 		formats := []string{"2006-01-02", "02-01-2006", "02/01/2006"}
 		parsed := false
 		for _, f := range formats {
-			signDate, err = time.Parse(f, req.ContractSignDate)
-			if err == nil {
+			signDate, parseErr = time.Parse(f, req.ContractSignDate)
+			if parseErr == nil {
 				parsed = true
 				break
 			}
@@ -97,8 +102,8 @@ func CalculateInsuranceRate(c *fiber.Ctx) error {
 			signDate = time.Now()
 		}
 	} else if loan.ContractSignDate != nil && *loan.ContractSignDate != "" {
-		signDate, err = time.Parse("2006-01-02", *loan.ContractSignDate)
-		if err != nil {
+		signDate, parseErr = time.Parse("2006-01-02", *loan.ContractSignDate)
+		if parseErr != nil {
 			signDate = time.Now()
 		}
 	} else {
@@ -116,8 +121,8 @@ func CalculateInsuranceRate(c *fiber.Ctx) error {
 		}
 
 		if dobStr != "" {
-			dob, err := time.Parse("2006-01-02", dobStr)
-			if err == nil {
+			dob, parseErr := time.Parse("2006-01-02", dobStr)
+			if parseErr == nil {
 				age = int(signDate.Year() - dob.Year())
 				if signDate.YearDay() < dob.YearDay() {
 					age--
@@ -321,8 +326,17 @@ func GetInsuClasses(c *fiber.Ctx) error {
 }
 
 var (
-	r2Once   sync.Once
-	r2Client *s3.S3
+	r2Once         sync.Once
+	r2Client       *s3.S3
+	presignFileURL = func(filename string) (string, error) {
+		svc := getR2Client()
+		req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
+			Bucket: aws.String(config.GetConfig().R2BucketName),
+			Key:    aws.String(filename),
+		})
+
+		return req.Presign(15 * time.Minute)
+	}
 )
 
 // getR2Client returns a cached S3 client (singleton) for Cloudflare R2.
@@ -344,6 +358,17 @@ func getR2Client() *s3.S3 {
 func UploadInsuranceFile(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	if loanID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		if err == fiber.ErrForbidden {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
+		if err == fiber.ErrNotFound {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
+		}
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
@@ -377,10 +402,6 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 	}
 
 	// Update Database
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
-		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
-	}
 
 	if loan.CarInsuranceFile == "" {
 		loan.CarInsuranceFile = filename
@@ -398,21 +419,24 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 	})
 }
 
-// GetFile Redirects to Presigned URL
+// GetFile redirects to a presigned URL after verifying the current user can access the file.
 func GetFile(c *fiber.Ctx) error {
 	filename := c.Params("filename")
 	if filename == "" {
 		return c.Status(400).SendString("Filename required")
 	}
 
-	svc := getR2Client()
-	req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
-		Bucket: aws.String(config.GetConfig().R2BucketName),
-		Key:    aws.String(filename),
-	})
+	if _, err := requireFileAccess(c, filename); err != nil {
+		if err == fiber.ErrForbidden {
+			return c.Status(fiber.StatusForbidden).SendString("Forbidden")
+		}
+		if err == fiber.ErrUnauthorized {
+			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
+		}
+		return c.Status(fiber.StatusNotFound).SendString("File not found")
+	}
 
-	// Presign for 15 minutes
-	urlStr, err := req.Presign(15 * time.Minute)
+	urlStr, err := presignFileURL(filename)
 	if err != nil {
 		log.Printf("Presign Error: %v", err)
 		return c.Status(500).SendString("Failed to generate download link")
@@ -432,14 +456,20 @@ func DeleteInsuranceFile(c *fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		if err == fiber.ErrForbidden {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
+		if err == fiber.ErrNotFound {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
+		}
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	var req DeleteFileRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
-	}
-
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
-		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "Loan not found"})
 	}
 
 	// Remove filename from DB field (comma separated)
@@ -487,12 +517,16 @@ func DeleteLoan(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	// 1. Fetch Loan Data to get File Paths
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, req.ID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Loan not found"})
+	loan, err := requireLoanAccess(c, req.ID)
+	if err != nil {
+		if err == fiber.ErrForbidden {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
+		if err == fiber.ErrNotFound {
+			return c.Status(404).JSON(fiber.Map{"error": "Loan not found"})
+		}
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-
 	// 2. Delete Uploaded Files
 	if loan.CarInsuranceFile != "" {
 		files := strings.Split(loan.CarInsuranceFile, ",")

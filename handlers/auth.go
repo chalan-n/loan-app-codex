@@ -11,13 +11,15 @@ import (
 )
 
 func LoginPage(c *fiber.Ctx) error {
-	// Check if user is already logged in
 	if parseJWTUsername(c.Cookies("token")) != "" {
 		return c.Redirect("/main")
 	}
 
-	// ส่ง error message ไปหน้า login ถ้ามี (จาก login ไม่สำเร็จ)
 	errorMsg := c.Query("error")
+	if errorMsg == "" && c.Query("status") == "error" {
+		errorMsg = "invalid_credentials"
+	}
+
 	return c.Render("login", fiber.Map{
 		"Error": errorMsg,
 	})
@@ -31,39 +33,35 @@ func LoginPost(c *fiber.Ctx) error {
 	config.DB.Where("username = ?", username).First(user)
 
 	if user.ID == 0 || bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
-		// ล็อกอินผิด → ส่งกลับไป login พร้อมสถานะ error
-		return c.Redirect("/login?status=error")
+		return c.Redirect("/login?error=invalid_credentials")
 	}
 
-	// ล็อกอินสำเร็จ
-	tokenStr, err := createJWTToken(user.Username)
+	tokenStr, err := issueUserSession(user)
 	if err != nil {
-		return c.Status(500).SendString("สร้าง token ไม่สำเร็จ")
+		return c.Status(500).SendString("ไม่สามารถสร้าง token ได้")
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "token",
-		Value:    tokenStr,
-		HTTPOnly: true,
-		Path:     "/",
-	})
-
+	setAuthCookie(c, tokenStr)
 	WriteAuditAs(c, user.Username, "login", "", "เข้าสู่ระบบสำเร็จ")
 	return c.Redirect("/main")
 }
 
-// createJWTToken สร้าง JWT token สำหรับ username ที่กำหนด
-func createJWTToken(username string) (string, error) {
+func createJWTToken(username, sessionID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
+		"username":   username,
+		"session_id": sessionID,
+		"exp":        time.Now().Add(24 * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(config.GetConfig().JWTSecret))
 }
 
 func Logout(c *fiber.Ctx) error {
 	WriteAudit(c, "logout", "", "ออกจากระบบ")
-	c.ClearCookie("token")
+	username := parseJWTUsername(c.Cookies("token"))
+	if username != "" {
+		config.DB.Model(&models.User{}).Where("username = ?", username).Update("current_session_id", "")
+	}
+	clearAuthCookie(c)
 	return c.Redirect("/login")
 }
 
@@ -74,13 +72,19 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	}
 
 	username := parseJWTUsername(tokenStr)
-	if username == "" {
-		c.ClearCookie("token")
+	sessionID := parseJWTSessionID(tokenStr)
+	if username == "" || sessionID == "" {
+		clearAuthCookie(c)
+		return c.Redirect("/login")
+	}
+
+	var user models.User
+	if err := config.DB.Select("username, current_session_id").Where("username = ?", username).First(&user).Error; err != nil || user.CurrentSessionID == "" || user.CurrentSessionID != sessionID {
+		clearAuthCookie(c)
 		return c.Redirect("/login")
 	}
 
 	c.Locals("username", username)
-
 	return c.Next()
 }
 
@@ -88,7 +92,6 @@ func ChangePasswordPage(c *fiber.Ctx) error {
 	return c.Render("change_password", nil)
 }
 
-// MobileAPIKeyMiddleware ตรวจ X-API-Key header สำหรับ endpoint ที่ mobile app เรียก
 func MobileAPIKeyMiddleware(c *fiber.Ctx) error {
 	key := c.Get("X-API-Key")
 	expected := config.GetConfig().MobileAPIKey
@@ -102,11 +105,8 @@ func ChangePasswordPost(c *fiber.Ctx) error {
 	oldPassword := c.FormValue("old_password")
 	newPassword := c.FormValue("new_password")
 
-	// Get user from token
 	username := parseJWTUsername(c.Cookies("token"))
-
 	if username == "" {
-		// Should be caught by middleware normally, but double check
 		return c.Status(401).JSON(fiber.Map{"success": false, "message": "Unauthorized"})
 	}
 
@@ -115,18 +115,18 @@ func ChangePasswordPost(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"success": false, "message": "User not found"})
 	}
 
-	// Verify old password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
 		return c.JSON(fiber.Map{"success": false, "message": "รหัสผ่านเดิมไม่ถูกต้อง"})
 	}
 
-	// Hash new password
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(newPassword), 14)
 	user.Password = string(hashedPassword)
+	user.CurrentSessionID = ""
 
 	if err := config.DB.Save(&user).Error; err != nil {
 		return c.JSON(fiber.Map{"success": false, "message": "บันทึกข้อมูลไม่สำเร็จ"})
 	}
 
+	clearAuthCookie(c)
 	return c.JSON(fiber.Map{"success": true, "message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"})
 }

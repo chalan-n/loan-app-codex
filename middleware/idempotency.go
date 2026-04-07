@@ -56,6 +56,8 @@ func Idempotency() fiber.Handler {
 			return c.Next()
 		}
 
+		key = scopedIdempotencyKey(c, key)
+
 		mu.Lock()
 
 		// ── Hit: return cached response ──
@@ -101,6 +103,16 @@ func Idempotency() fiber.Handler {
 
 		return err
 	}
+}
+
+func scopedIdempotencyKey(c *fiber.Ctx, key string) string {
+	scope := c.Method() + ":" + c.Path()
+	if username, ok := c.Locals("username").(string); ok && username != "" {
+		scope += ":" + username
+	} else if apiKey := c.Get("X-API-Key"); apiKey != "" {
+		scope += ":" + apiKey
+	}
+	return scope + ":" + key
 }
 
 // StoreSize returns the current number of cached entries (for monitoring).

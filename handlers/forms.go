@@ -24,7 +24,7 @@ func Dashboard(c *fiber.Ctx) error {
 	return c.Render("dashboard", nil)
 }
 
-// 📱 API: Get Loan List as JSON (สำหรับ Mobile App)
+// API: Get loan list as JSON for the mobile app.
 func GetLoanList(c *fiber.Ctx) error {
 	// 1. Get User from Token (same as MainPage)
 	staffID := parseJWTUsername(c.Cookies("token"))
@@ -57,28 +57,29 @@ func MainPage(c *fiber.Ctx) error {
 	}
 
 	return c.Render("main", fiber.Map{
-		"title":       "หน้าหลัก - CMO APP",
+		"title":       "Main - CMO APP",
 		"Loans":       loans,
 		"StaffID":     staffID,
 		"CurrentRole": getUserRole(staffID),
 	})
 }
 
-/* ข้อมูลผู้เช่าซื้อ */
+/* Step 1: borrower profile and contact details */
 func Step1(c *fiber.Ctx) error {
 	id := c.Query("id")
 	var loan models.LoanApplication
 
 	// If ID is provided (Edit Mode)
 	if id != "" {
-		if err := config.DB.First(&loan, id).Error; err == nil {
+		if accessibleLoan, err := requireLoanAccess(c, id); err == nil {
+			loan = *accessibleLoan
 			// Set cookie
 			c.Cookie(&fiber.Cookie{
 				Name:  "loan_id",
 				Value: fmt.Sprintf("%d", loan.ID),
 			})
 			return c.Render("step1", fiber.Map{
-				"title": "ขั้นตอน 1",
+				"title": "Step 1",
 				"Loan":  loan,
 			})
 		}
@@ -87,7 +88,7 @@ func Step1(c *fiber.Ctx) error {
 	// If no ID (Add Mode), clear cookie
 	c.ClearCookie("loan_id")
 	return c.Render("step1", fiber.Map{
-		"title": "ขั้นตอน 1",
+		"title": "Step 1",
 		"Loan":  models.LoanApplication{},
 	})
 }
@@ -130,18 +131,7 @@ func Step1Post(c *fiber.Ctx) error {
 		// Update Mode
 		var existingLoan models.LoanApplication
 		if err := config.DB.First(&existingLoan, cookieID).Error; err == nil {
-			// Update only Step 1 fields
-			// GORM Updates with struct ignores zero values, which is mostly fine here.
-			// However, RefCode and Status should usually NOT be changed by Step 1 Edit unless intended.
-			// We construct a specific update map or struct.
-			// Helper: use the 'loan' struct we built, but ensure RefCode is NOT overwritten if we don't want to.
-			// actually 'loan' above has a NEW generated RefCode. We should NOT use that for update.
-
-			// Let's rebuild the loan struct WITHOUT RefCode/Status for update,
-			// OR just overwrite them in 'loan' with existing values before Update?
-			// But 'loan' is a fresh struct.
-
-			// Better Strategy: Define updates map
+			// Update only Step 1 fields.
 			updates := map[string]interface{}{
 				"LastUpdateDate":      time.Now().Format("2006-01-02 15:04:05"),
 				"StaffID":             staffID,
@@ -164,12 +154,6 @@ func Step1Post(c *fiber.Ctx) error {
 					}
 					return c.FormValue("work_company_name")
 				}(),
-				// ... skipping irrelevant lines if contiguous ...
-				// Actually, I cannot skip in ReplacementContent without providing the full block.
-				// Let's try to target specific lines if possible or blocks.
-				// Step 1 Updates Map is large.
-				// I will target the specific dates in Step 1 NEW creation first, then Updates map.
-
 				// Address - House Registration
 				"HouseRegNo":          c.FormValue("house_reg_no"),
 				"HouseRegBuilding":    c.FormValue("house_reg_building"),
@@ -397,12 +381,14 @@ func Step1Post(c *fiber.Ctx) error {
 	return c.Redirect("/step2")
 }
 
-/* ข้อมูลรถ */
+/* Step 2: loan objective and requested amount */
 func Step2(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			loan = *accessibleLoan
+		}
 	}
 
 	var carKinds []models.CarKind
@@ -412,7 +398,7 @@ func Step2(c *fiber.Ctx) error {
 	config.DB.Find(&carBrands)
 
 	return c.Render("step2", fiber.Map{
-		"title":     "ขั้นตอน 2",
+		"title":     "Step 2",
 		"Loan":      loan,
 		"CarKinds":  carKinds,
 		"CarBrands": carBrands,
@@ -425,8 +411,9 @@ func Step2Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -470,19 +457,21 @@ func Step2Post(c *fiber.Ctx) error {
 
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 	return c.Redirect("/step3")
 }
 
-/* ข้อมูลสัญญา */
+/* Step 3: collateral and repayment details */
 func Step3(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			loan = *accessibleLoan
+		}
 	}
 	return c.Render("step3", fiber.Map{
-		"title": "ขั้นตอน 3",
+		"title": "Step 3",
 		"Loan":  loan,
 	})
 }
@@ -493,8 +482,9 @@ func Step3Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -558,11 +548,11 @@ func Step3Post(c *fiber.Ctx) error {
 
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 	return c.Redirect("/step4")
 }
 
-/* ค้ำประกัน/อื่นๆ */
+/* Step 4: guarantor and reference information */
 func Step4(c *fiber.Ctx) error {
 	// Support ?id= query param (e.g. redirect back from add_guarantor) or cookie
 	loanID := c.Query("id")
@@ -578,10 +568,12 @@ func Step4(c *fiber.Ctx) error {
 
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.Preload("Guarantors", "deleted_at IS NULL").First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			config.DB.Preload("Guarantors", "deleted_at IS NULL").First(&loan, accessibleLoan.ID)
+		}
 	}
 	return c.Render("step4", fiber.Map{
-		"title": "ขั้นตอน 4",
+		"title": "Step 4",
 		"Loan":  loan,
 	})
 }
@@ -592,8 +584,9 @@ func Step4Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -629,19 +622,21 @@ func Step4Post(c *fiber.Ctx) error {
 
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 	return c.Redirect("/step5")
 }
 
-/* ประกันชีวิต */
+/* Step 5: insurance and protection options */
 func Step5(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			loan = *accessibleLoan
+		}
 	}
 	return c.Render("step5", fiber.Map{
-		"title": "ขั้นตอน 5",
+		"title": "Step 5",
 		"Loan":  loan,
 	})
 }
@@ -652,8 +647,9 @@ func Step5Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -700,19 +696,21 @@ func Step5Post(c *fiber.Ctx) error {
 
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 	return c.Redirect("/step6")
 }
 
-/* ประกันภัย */
+/* Step 6: document checklist and upload confirmation */
 func Step6(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			loan = *accessibleLoan
+		}
 	}
 	return c.Render("step6", fiber.Map{
-		"title": "ขั้นตอน 6",
+		"title": "Step 6",
 		"Loan":  loan,
 	})
 }
@@ -723,8 +721,9 @@ func Step6Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -744,19 +743,21 @@ func Step6Post(c *fiber.Ctx) error {
 
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 	return c.Redirect("/step7")
 }
 
-/* หักภาษี */
+/* Step 7: tax invoice and final submission */
 func Step7(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		config.DB.First(&loan, loanID)
+		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
+			loan = *accessibleLoan
+		}
 	}
 	return c.Render("step7", fiber.Map{
-		"title": "ขั้นตอน 7",
+		"title": "Step 7",
 		"Loan":  loan,
 	})
 }
@@ -767,8 +768,9 @@ func Step7Post(c *fiber.Ctx) error {
 		return c.Redirect("/step1")
 	}
 
-	var loan models.LoanApplication
-	if err := config.DB.First(&loan, loanID).Error; err != nil {
+	loan, err := requireLoanAccess(c, loanID)
+	if err != nil {
+		clearAuthCookie(c)
 		return c.Redirect("/step1")
 	}
 
@@ -795,8 +797,8 @@ func Step7Post(c *fiber.Ctx) error {
 	loan.Status = "D"
 	loan.LastUpdateDate = time.Now().Format("2006-01-02 15:04:05")
 
-	config.DB.Save(&loan)
-	WriteAudit(c, "submit_loan", loan.RefCode, "บันทึกสมบูรณ์ step 7")
+	config.DB.Save(loan)
+	WriteAudit(c, "submit_loan", loan.RefCode, "Completed step 7")
 
 	// Clear cookie after finish
 	c.ClearCookie("loan_id")
@@ -820,7 +822,7 @@ func UpdateStatus(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Loan not found"})
 	}
 
-	// ถ้าไม่ส่ง status มา ใช้ P (Pending) เหมือนเดิม
+	// Default to pending when the caller does not provide an explicit status.
 	newStatus := req.Status
 	if newStatus == "" {
 		newStatus = "P"
@@ -832,23 +834,23 @@ func UpdateStatus(c *fiber.Ctx) error {
 		loan.SubmittedDate = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	config.DB.Save(&loan)
+	config.DB.Save(loan)
 
-	// แจ้งเตือนเฉพาะเมื่อมีผลการอนุมัติ และส่งเฉพาะ staff เจ้าของเคส
+	// Notify the assigned staff member once the status changes.
 	borrowerName := loan.FirstName + " " + loan.LastName
 	if borrowerName == " " {
 		borrowerName = loan.RefCode
 	}
 	switch newStatus {
 	case "A":
-		BroadcastToStaff(loan.StaffID, "✅ อนุมัติสินเชื่อแล้ว",
-			fmt.Sprintf("เลขที่ %s - %s ได้รับการอนุมัติ", loan.RefCode, borrowerName))
+		BroadcastToStaff(loan.StaffID, "Loan approved",
+			fmt.Sprintf("Ref %s - %s has been approved", loan.RefCode, borrowerName))
 	case "R":
-		BroadcastToStaff(loan.StaffID, "❌ ไม่อนุมัติสินเชื่อ",
-			fmt.Sprintf("เลขที่ %s - %s ไม่ผ่านการอนุมัติ", loan.RefCode, borrowerName))
+		BroadcastToStaff(loan.StaffID, "Loan rejected",
+			fmt.Sprintf("Ref %s - %s has been rejected", loan.RefCode, borrowerName))
 	case "C":
-		BroadcastToStaff(loan.StaffID, "⚠️ อนุมัติแบบมีเงื่อนไข",
-			fmt.Sprintf("เลขที่ %s - %s อนุมัติแบบมีเงื่อนไข", loan.RefCode, borrowerName))
+		BroadcastToStaff(loan.StaffID, "Additional conditions required",
+			fmt.Sprintf("Ref %s - %s requires additional conditions", loan.RefCode, borrowerName))
 	}
 
 	return c.JSON(fiber.Map{"success": true})

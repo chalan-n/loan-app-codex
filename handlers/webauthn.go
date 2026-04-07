@@ -329,17 +329,12 @@ func WebAuthnLoginFinish(c *fiber.Ctx) error {
 		})
 
 	c.ClearCookie("wa_login_session")
-	tokenStr, err := createJWTToken(resolvedUser.user.Username)
+	tokenStr, err := issueUserSession(&resolvedUser.user)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "สร้าง token ไม่สำเร็จ"})
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "token",
-		Value:    tokenStr,
-		HTTPOnly: true,
-		Path:     "/",
-	})
+	setAuthCookie(c, tokenStr)
 
 	WriteAuditAs(c, resolvedUser.user.Username, "login_biometric", "", "เข้าสู่ระบบด้วย biometric สำเร็จ")
 	return c.JSON(fiber.Map{"success": true, "redirect": "/main"})
