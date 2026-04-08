@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"loan-app/models"
@@ -37,6 +39,38 @@ func newTokenForTests(t *testing.T, username string) string {
 		t.Fatalf("createJWTToken() error: %v", err)
 	}
 	return token
+}
+
+func doRequestWithCookies(t *testing.T, app *fiber.App, method, target string, body string, cookies ...*http.Cookie) *http.Response {
+	t.Helper()
+
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+
+	req := httptest.NewRequest(method, target, reader)
+	if body != "" {
+		req.Header.Set("Content-Type", fiber.MIMEApplicationForm)
+	}
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+
+	return resp
+}
+
+func formBody(values map[string]string) string {
+	data := url.Values{}
+	for key, value := range values {
+		data.Set(key, value)
+	}
+	return data.Encode()
 }
 
 func TestRequireLoanAccessRejectsDifferentOfficer(t *testing.T) {
@@ -176,4 +210,144 @@ func TestStep2PostRedirectsWhenLoanBelongsToAnotherOfficer(t *testing.T) {
 	if got := resp.Header.Get("Location"); got != "/step1" {
 		t.Fatalf("Step2Post redirect = %q, want %q", got, "/step1")
 	}
+}
+
+func TestRestrictedStepPostsRedirectWhenLoanBelongsToAnotherOfficer(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
+
+	tests := []struct {
+		name string
+		path string
+		h    fiber.Handler
+	}{
+		{name: "step3", path: "/step3", h: Step3Post},
+		{name: "step4", path: "/step4", h: Step4Post},
+		{name: "step5", path: "/step5", h: Step5Post},
+		{name: "step6", path: "/step6", h: Step6Post},
+		{name: "step7", path: "/step7", h: Step7Post},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Post(tc.path, tc.h)
+
+			resp := doRequestWithCookies(
+				t,
+				app,
+				http.MethodPost,
+				tc.path,
+				"",
+				&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+				&http.Cookie{Name: "loan_id", Value: "12"},
+			)
+			defer resp.Body.Close()
+
+			if resp.StatusCode != fiber.StatusFound {
+				t.Fatalf("%s status = %d, want %d", tc.name, resp.StatusCode, fiber.StatusFound)
+			}
+			if got := resp.Header.Get("Location"); got != "/step1" {
+				t.Fatalf("%s redirect = %q, want %q", tc.name, got, "/step1")
+			}
+			if setCookie := resp.Header.Get("Set-Cookie"); !strings.Contains(setCookie, "token=") {
+				t.Fatalf("%s should clear auth cookie, got %q", tc.name, setCookie)
+			}
+		})
+	}
+}
+
+func TestDeleteLoanRejectsDifferentOfficer(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
+
+	app := fiber.New()
+	app.Post("/delete-loan", DeleteLoan)
+
+	req := httptest.NewRequest(http.MethodPost, "/delete-loan", strings.NewReader(`{"id":12}`))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")})
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("DeleteLoan status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusForbidden, string(body))
+	}
+}
+
+func TestGuarantorRoutesRejectDifferentOfficer(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
+
+	t.Run("add-guarantor-get", func(t *testing.T) {
+		app := fiber.New()
+		app.Get("/guarantor", AddGuarantorGetV2)
+
+		resp := doRequestWithCookies(
+			t,
+			app,
+			http.MethodGet,
+			"/guarantor?loan_id=12&guarantor_id=4",
+			"",
+			&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+		)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != fiber.StatusFound {
+			t.Fatalf("AddGuarantorGetV2 status = %d, want %d", resp.StatusCode, fiber.StatusFound)
+		}
+		if got := resp.Header.Get("Location"); got != "/main" {
+			t.Fatalf("AddGuarantorGetV2 redirect = %q, want %q", got, "/main")
+		}
+	})
+
+	t.Run("add-guarantor-post", func(t *testing.T) {
+		app := fiber.New()
+		app.Post("/guarantor", AddGuarantorPostV2)
+
+		resp := doRequestWithCookies(
+			t,
+			app,
+			http.MethodPost,
+			"/guarantor",
+			formBody(map[string]string{
+				"loan_id":      "12",
+				"first_name":   "Jane",
+				"last_name":    "Doe",
+				"guarantor_id": "4",
+			}),
+			&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+		)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != fiber.StatusForbidden {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("AddGuarantorPostV2 status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusForbidden, string(body))
+		}
+	})
+
+	t.Run("delete-guarantor", func(t *testing.T) {
+		app := fiber.New()
+		app.Post("/guarantor/delete", DeleteGuarantor)
+
+		resp := doRequestWithCookies(
+			t,
+			app,
+			http.MethodPost,
+			"/guarantor/delete",
+			formBody(map[string]string{
+				"id":      "4",
+				"loan_id": "12",
+			}),
+			&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+		)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != fiber.StatusForbidden {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("DeleteGuarantor status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusForbidden, string(body))
+		}
+	})
 }
