@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"loan-app/config"
 	"loan-app/models"
 	"strconv"
@@ -26,6 +27,14 @@ var (
 		return getUserRole(username)
 	}
 )
+
+func logDeniedLoanAccess(c *fiber.Ctx, username string, loanID interface{}, reason string) {
+	WriteAuditAs(c, username, "deny_loan_access", "", "loan_id="+fmt.Sprint(loanID)+" reason="+reason)
+}
+
+func logDeniedFileAccess(c *fiber.Ctx, username, filename, reason string) {
+	WriteAuditAs(c, username, "deny_file_access", "", "filename="+filename+" reason="+reason)
+}
 
 func parseJWTClaims(tokenStr string) (jwt.MapClaims, bool) {
 	if tokenStr == "" {
@@ -117,11 +126,13 @@ func clearAuthCookie(c *fiber.Ctx) {
 func requireLoanAccess(c *fiber.Ctx, loanID interface{}) (*models.LoanApplication, error) {
 	username := parseJWTUsername(c.Cookies("token"))
 	if username == "" {
+		logDeniedLoanAccess(c, "", loanID, "missing_auth")
 		return nil, fiber.ErrUnauthorized
 	}
 
 	loan, err := loadLoanApplication(loanID)
 	if err != nil {
+		logDeniedLoanAccess(c, username, loanID, "not_found")
 		return nil, fiber.ErrNotFound
 	}
 
@@ -130,6 +141,7 @@ func requireLoanAccess(c *fiber.Ctx, loanID interface{}) (*models.LoanApplicatio
 		return loan, nil
 	}
 
+	logDeniedLoanAccess(c, username, loanID, "forbidden")
 	return nil, fiber.ErrForbidden
 }
 
@@ -157,17 +169,23 @@ func loanHasFile(loan *models.LoanApplication, filename string) bool {
 }
 
 func requireFileAccess(c *fiber.Ctx, filename string) (*models.LoanApplication, error) {
+	username := parseJWTUsername(c.Cookies("token"))
 	loanID, ok := loanIDFromFilename(filename)
 	if !ok {
+		logDeniedFileAccess(c, username, filename, "invalid_filename")
 		return nil, fiber.ErrNotFound
 	}
 
 	loan, err := requireLoanAccess(c, loanID)
 	if err != nil {
+		if err == fiber.ErrUnauthorized {
+			logDeniedFileAccess(c, username, filename, "missing_auth")
+		}
 		return nil, err
 	}
 
 	if !loanHasFile(loan, filename) {
+		logDeniedFileAccess(c, username, filename, "file_not_linked")
 		return nil, fiber.ErrNotFound
 	}
 

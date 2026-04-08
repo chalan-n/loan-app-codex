@@ -35,6 +35,22 @@ func withLoanStubs(t *testing.T, loan *models.LoanApplication, role string) {
 	}
 }
 
+func withAuditCapture(t *testing.T) *[]models.AuditLog {
+	t.Helper()
+
+	var entries []models.AuditLog
+	prevWriter := auditLogWriter
+	t.Cleanup(func() {
+		auditLogWriter = prevWriter
+	})
+
+	auditLogWriter = func(entry *models.AuditLog) {
+		entries = append(entries, *entry)
+	}
+
+	return &entries
+}
+
 func newTokenForTests(t *testing.T, username string) string {
 	t.Helper()
 	token, err := createJWTToken(username, "test-session")
@@ -96,6 +112,7 @@ func newAppWithTemplates(t *testing.T, files map[string]string) *fiber.App {
 
 func TestRequireLoanAccessRejectsDifferentOfficer(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 7, StaffID: "owner"}, models.RoleOfficer)
+	logs := withAuditCapture(t)
 
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -110,6 +127,15 @@ func TestRequireLoanAccessRejectsDifferentOfficer(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")})
 	if _, err := app.Test(req); err != nil {
 		t.Fatalf("app.Test() error: %v", err)
+	}
+	if len(*logs) != 1 {
+		t.Fatalf("audit logs = %d, want %d", len(*logs), 1)
+	}
+	if (*logs)[0].Action != "deny_loan_access" {
+		t.Fatalf("audit action = %q, want %q", (*logs)[0].Action, "deny_loan_access")
+	}
+	if !strings.Contains((*logs)[0].Detail, "loan_id=7") || !strings.Contains((*logs)[0].Detail, "reason=forbidden") {
+		t.Fatalf("audit detail = %q, want denied loan access detail", (*logs)[0].Detail)
 	}
 }
 
@@ -159,6 +185,7 @@ func TestRequireLoanAccessAllowsOwnerForOwnLoan(t *testing.T) {
 
 func TestRequireFileAccessRejectsUnknownFilenameForLoan(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "570639", CarInsuranceFile: "12_123_policy.pdf"}, models.RoleOfficer)
+	logs := withAuditCapture(t)
 
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -173,6 +200,15 @@ func TestRequireFileAccessRejectsUnknownFilenameForLoan(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "570639")})
 	if _, err := app.Test(req); err != nil {
 		t.Fatalf("app.Test() error: %v", err)
+	}
+	if len(*logs) != 1 {
+		t.Fatalf("audit logs = %d, want %d", len(*logs), 1)
+	}
+	if (*logs)[0].Action != "deny_file_access" {
+		t.Fatalf("audit action = %q, want %q", (*logs)[0].Action, "deny_file_access")
+	}
+	if !strings.Contains((*logs)[0].Detail, "filename=12_999_other.pdf") || !strings.Contains((*logs)[0].Detail, "reason=file_not_linked") {
+		t.Fatalf("audit detail = %q, want denied file access detail", (*logs)[0].Detail)
 	}
 }
 
