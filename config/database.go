@@ -2,8 +2,6 @@
 package config
 
 import (
-	"loan-app/models"
-
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -17,5 +15,4 @@ func ConnectDB() {
 		panic("เชื่อม DB ไม่ได้: " + err.Error())
 	}
 	DB = db
-	db.AutoMigrate(&models.User{}, &models.LoanApplication{}, &models.Guarantor{}, &models.AuditLog{}, &models.WebAuthnCredential{}, &models.LoanFile{})
 }

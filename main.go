@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"loan-app/config"
 	"loan-app/handlers"
+	"loan-app/migrations"
 	"loan-app/models"
 	"loan-app/routes"
 	"log"
 	"net"
+	"os"
 
 	"time"
 
@@ -97,9 +99,14 @@ func main() {
 
 	config.ConnectDB()
 
-	// === AutoMigrate — run once at startup ===
-	config.DB.AutoMigrate(&models.Guarantor{}, &models.RefRunning{}, &models.LoanFile{})
-	// =============================================
+	if err := migrations.Run(config.DB); err != nil {
+		log.Fatalf("[migrations] failed: %v", err)
+	}
+	log.Println("[migrations] up to date")
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		log.Println("[migrations] completed; exiting without starting server")
+		return
+	}
 
 	// === WebAuthn Init ===
 	waCfg := config.GetConfig()
