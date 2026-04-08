@@ -212,6 +212,38 @@ func TestStep2PostRedirectsWhenLoanBelongsToAnotherOfficer(t *testing.T) {
 	}
 }
 
+func TestStep1PostRedirectsWhenLoanBelongsToAnotherOfficer(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
+
+	app := fiber.New()
+	app.Post("/step1", Step1Post)
+
+	resp := doRequestWithCookies(
+		t,
+		app,
+		http.MethodPost,
+		"/step1",
+		formBody(map[string]string{
+			"first_name": "Jane",
+			"last_name":  "Doe",
+			"id_card":    "1234567890123",
+		}),
+		&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+		&http.Cookie{Name: "loan_id", Value: "12"},
+	)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusFound {
+		t.Fatalf("Step1Post status = %d, want %d", resp.StatusCode, fiber.StatusFound)
+	}
+	if got := resp.Header.Get("Location"); got != "/step1" {
+		t.Fatalf("Step1Post redirect = %q, want %q", got, "/step1")
+	}
+	if setCookie := resp.Header.Get("Set-Cookie"); !strings.Contains(setCookie, "token=") {
+		t.Fatalf("Step1Post should clear auth cookie, got %q", setCookie)
+	}
+}
+
 func TestRestrictedStepPostsRedirectWhenLoanBelongsToAnotherOfficer(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
 

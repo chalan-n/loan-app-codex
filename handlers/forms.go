@@ -129,8 +129,12 @@ func Step1Post(c *fiber.Ctx) error {
 	cookieID := c.Cookies("loan_id")
 	if cookieID != "" {
 		// Update Mode
-		var existingLoan models.LoanApplication
-		if err := config.DB.First(&existingLoan, cookieID).Error; err == nil {
+		existingLoan, err := requireLoanAccess(c, cookieID)
+		if err != nil {
+			clearAuthCookie(c)
+			return c.Redirect("/step1")
+		}
+		if existingLoan != nil {
 			// Update only Step 1 fields.
 			updates := map[string]interface{}{
 				"LastUpdateDate":      time.Now().Format("2006-01-02 15:04:05"),
@@ -218,7 +222,7 @@ func Step1Post(c *fiber.Ctx) error {
 				"CreditBureauStatus": c.FormValue("credit_bureau_status"),
 			}
 
-			config.DB.Model(&existingLoan).Updates(updates)
+			config.DB.Model(existingLoan).Updates(updates)
 
 			// Redirect
 			return c.Redirect("/step2")

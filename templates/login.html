@@ -11,7 +11,46 @@
   <link rel="stylesheet" href="/static/css/kanit.css">
   <link rel="stylesheet" href="/static/css/all.min.css">
   <link rel="stylesheet" href="/static/css/custom_loading.css">
-  <script src="/static/js/custom_loading.js"></script>
+  <script defer src="/static/js/custom_loading.js?v=20260408"></script>
+  <script>
+    (function () {
+      function ensureOverlay() {
+        var overlay = document.getElementById('loadingOverlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'loadingOverlay';
+          overlay.innerHTML = [
+            '<div class="loading-spinner"></div>',
+            '<div class="loading-text">กำลังประมวลผล...</div>'
+          ].join('');
+          document.body.appendChild(overlay);
+        }
+        return overlay;
+      }
+
+      if (typeof window.showLoading !== 'function') {
+        window.showLoading = function (text) {
+          var overlay = ensureOverlay();
+          var message = overlay.querySelector('.loading-text');
+          if (message) {
+            message.textContent = text || 'กำลังประมวลผล...';
+          }
+          overlay.classList.add('show');
+        };
+      }
+
+      if (typeof window.hideLoading !== 'function') {
+        window.hideLoading = function () {
+          var overlay = document.getElementById('loadingOverlay');
+          if (overlay) {
+            overlay.classList.remove('show');
+          }
+        };
+      }
+
+      document.addEventListener('DOMContentLoaded', ensureOverlay);
+    })();
+  </script>
 
   <style>
     :root {
