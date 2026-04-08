@@ -1,29 +1,60 @@
 package routes
 
 import (
+	"loan-app/config"
 	"loan-app/handlers"
 	"loan-app/middleware"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 )
 
 func Setup(app *fiber.App) {
+	cfg := config.GetConfig()
+
+	loginLimiter := middleware.RateLimit(middleware.RateLimitOptions{
+		Name:         "login",
+		Max:          cfg.LoginRateLimitMax,
+		Window:       time.Duration(cfg.LoginRateLimitWindowSeconds) * time.Second,
+		BlockHandler: middleware.LoginRateLimitExceeded,
+	})
+	authAPILimiter := middleware.RateLimit(middleware.RateLimitOptions{
+		Name:   "login-api",
+		Max:    cfg.LoginRateLimitMax,
+		Window: time.Duration(cfg.LoginRateLimitWindowSeconds) * time.Second,
+	})
+	searchLimiter := middleware.RateLimit(middleware.RateLimitOptions{
+		Name:   "search",
+		Max:    cfg.SearchRateLimitMax,
+		Window: time.Duration(cfg.SearchRateLimitWindowSeconds) * time.Second,
+	})
+	insuranceLimiter := middleware.RateLimit(middleware.RateLimitOptions{
+		Name:   "insurance",
+		Max:    cfg.InsuranceRateLimitMax,
+		Window: time.Duration(cfg.InsuranceRateLimitWindowSeconds) * time.Second,
+	})
+	uploadLimiter := middleware.RateLimit(middleware.RateLimitOptions{
+		Name:   "upload",
+		Max:    cfg.UploadRateLimitMax,
+		Window: time.Duration(cfg.UploadRateLimitWindowSeconds) * time.Second,
+	})
+
 	app.Use("/ws", handlers.WsHandler)
 	app.Get("/ws", websocket.New(handlers.WsConnect))
 	app.Use(middleware.CSRFProtection())
 
 	app.Get("/login", handlers.LoginPage)
-	app.Post("/login", handlers.LoginPost)
+	app.Post("/login", loginLimiter, handlers.LoginPost)
 	app.Get("/logout", handlers.Logout)
 
 	// Mobile App API — protected by API Key (not cookie)
 	app.Post("/api/update-status", handlers.MobileAPIKeyMiddleware, handlers.UpdateStatus)
 
 	// WebAuthn login routes — ต้องอยู่ก่อน AuthMiddleware (ผู้ใช้ยังไม่ได้ login)
-	app.Post("/webauthn/login/begin", handlers.WebAuthnLoginBegin)
-	app.Post("/webauthn/login/finish", handlers.WebAuthnLoginFinish)
-	app.Post("/webauthn/check", handlers.WebAuthnCheck)
+	app.Post("/webauthn/login/begin", authAPILimiter, handlers.WebAuthnLoginBegin)
+	app.Post("/webauthn/login/finish", authAPILimiter, handlers.WebAuthnLoginFinish)
+	app.Post("/webauthn/check", authAPILimiter, handlers.WebAuthnCheck)
 
 	app.Use(handlers.AuthMiddleware)
 
@@ -55,11 +86,11 @@ func Setup(app *fiber.App) {
 	// API
 	app.Get("/api/loan-list", handlers.GetLoanList) // 📱 Mobile App
 	app.Post("/api/sync-work", idem, handlers.UpdateSyncStatus)
-	app.Post("/api/search-car", handlers.SearchCar)
-	app.Post("/api/calculate-insurance", handlers.CalculateInsuranceRate)
-	app.Post("/api/search-agent", handlers.SearchAgent)
-	app.Post("/api/search-showroom", handlers.SearchShowroom)
-	app.Post("/api/upload-insurance-file", handlers.UploadInsuranceFile)
+	app.Post("/api/search-car", searchLimiter, handlers.SearchCar)
+	app.Post("/api/calculate-insurance", insuranceLimiter, handlers.CalculateInsuranceRate)
+	app.Post("/api/search-agent", searchLimiter, handlers.SearchAgent)
+	app.Post("/api/search-showroom", searchLimiter, handlers.SearchShowroom)
+	app.Post("/api/upload-insurance-file", uploadLimiter, handlers.UploadInsuranceFile)
 	app.Post("/api/delete-insurance-file", handlers.DeleteInsuranceFile)
 	app.Post("/api/delete-loan", idem, handlers.DeleteLoan)
 	app.Get("/api/titles", handlers.GetTitles)

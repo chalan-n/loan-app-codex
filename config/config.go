@@ -32,6 +32,16 @@ type AppConfig struct {
 	SessionIdleTimeoutMinutes     int
 	SessionActivityRefreshSeconds int
 
+	// Rate limiting
+	LoginRateLimitMax               int
+	LoginRateLimitWindowSeconds     int
+	SearchRateLimitMax              int
+	SearchRateLimitWindowSeconds    int
+	InsuranceRateLimitMax           int
+	InsuranceRateLimitWindowSeconds int
+	UploadRateLimitMax              int
+	UploadRateLimitWindowSeconds    int
+
 	// Mobile API
 	MobileAPIKey string
 
@@ -80,9 +90,17 @@ func GetConfig() *AppConfig {
 		AppEnv:           getEnv("APP_ENV", "development"),
 		CORSAllowOrigins: getEnv("CORS_ALLOW_ORIGINS", "*"),
 
-		JWTSecret:                     getEnv("JWT_SECRET", "changeme-secret"),
-		SessionIdleTimeoutMinutes:     getEnvInt("SESSION_IDLE_TIMEOUT_MINUTES", 30),
-		SessionActivityRefreshSeconds: getEnvInt("SESSION_ACTIVITY_REFRESH_SECONDS", 300),
+		JWTSecret:                       getEnv("JWT_SECRET", "changeme-secret"),
+		SessionIdleTimeoutMinutes:       getEnvInt("SESSION_IDLE_TIMEOUT_MINUTES", 30),
+		SessionActivityRefreshSeconds:   getEnvInt("SESSION_ACTIVITY_REFRESH_SECONDS", 300),
+		LoginRateLimitMax:               getEnvInt("LOGIN_RATE_LIMIT_MAX", 5),
+		LoginRateLimitWindowSeconds:     getEnvInt("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300),
+		SearchRateLimitMax:              getEnvInt("SEARCH_RATE_LIMIT_MAX", 60),
+		SearchRateLimitWindowSeconds:    getEnvInt("SEARCH_RATE_LIMIT_WINDOW_SECONDS", 60),
+		InsuranceRateLimitMax:           getEnvInt("INSURANCE_RATE_LIMIT_MAX", 30),
+		InsuranceRateLimitWindowSeconds: getEnvInt("INSURANCE_RATE_LIMIT_WINDOW_SECONDS", 60),
+		UploadRateLimitMax:              getEnvInt("UPLOAD_RATE_LIMIT_MAX", 20),
+		UploadRateLimitWindowSeconds:    getEnvInt("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", 300),
 
 		MobileAPIKey: getEnv("MOBILE_API_KEY", ""),
 
