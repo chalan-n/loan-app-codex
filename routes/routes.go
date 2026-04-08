@@ -11,6 +11,7 @@ import (
 func Setup(app *fiber.App) {
 	app.Use("/ws", handlers.WsHandler)
 	app.Get("/ws", websocket.New(handlers.WsConnect))
+	app.Use(middleware.CSRFProtection())
 
 	app.Get("/login", handlers.LoginPage)
 	app.Post("/login", handlers.LoginPost)
