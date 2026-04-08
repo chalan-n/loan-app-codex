@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"loan-app/config"
 	"loan-app/models"
+	"loan-app/repositories"
 	"loan-app/services"
 	"time"
 
@@ -68,6 +69,24 @@ var (
 	}
 	sessionActivityRefreshInterval = func() time.Duration {
 		return time.Duration(config.GetConfig().SessionActivityRefreshSeconds) * time.Second
+	}
+	loadLoanFileMetadata = func(filename string) (*models.LoanFile, error) {
+		if config.DB == nil {
+			return nil, errors.New("loan file metadata unavailable")
+		}
+		return repositories.NewGormLoanFileRepository(config.DB).FindByStorageKey(filename)
+	}
+	createLoanFileMetadata = func(file *models.LoanFile) error {
+		if config.DB == nil {
+			return nil
+		}
+		return repositories.NewGormLoanFileRepository(config.DB).Create(file)
+	}
+	deleteLoanFileMetadata = func(loanID int, filename string) error {
+		if config.DB == nil {
+			return nil
+		}
+		return repositories.NewGormLoanFileRepository(config.DB).DeleteByLoanAndStorageKey(loanID, filename)
 	}
 )
 
@@ -204,6 +223,21 @@ func loanHasFile(loan *models.LoanApplication, filename string) bool {
 
 func requireFileAccess(c *fiber.Ctx, filename string) (*models.LoanApplication, error) {
 	username := parseJWTUsername(c.Cookies("token"))
+	if fileMeta, err := loadLoanFileMetadata(filename); err == nil && fileMeta != nil {
+		loan, accessErr := requireLoanAccess(c, fileMeta.LoanID)
+		if accessErr != nil {
+			if accessErr == fiber.ErrUnauthorized {
+				logDeniedFileAccess(c, username, filename, "missing_auth")
+			}
+			return nil, accessErr
+		}
+		if fileMeta.StorageKey != filename || fileMeta.LoanID != loan.ID || !loanHasFile(loan, filename) {
+			logDeniedFileAccess(c, username, filename, "metadata_mismatch")
+			return nil, fiber.ErrNotFound
+		}
+		return loan, nil
+	}
+
 	loanID, ok := loanIDFromFilename(filename)
 	if !ok {
 		logDeniedFileAccess(c, username, filename, "invalid_filename")
@@ -219,7 +253,7 @@ func requireFileAccess(c *fiber.Ctx, filename string) (*models.LoanApplication, 
 	}
 
 	if !loanHasFile(loan, filename) {
-		logDeniedFileAccess(c, username, filename, "file_not_linked")
+		logDeniedFileAccess(c, username, filename, "legacy_file_not_linked")
 		return nil, fiber.ErrNotFound
 	}
 

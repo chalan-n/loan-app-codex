@@ -51,6 +51,26 @@ func withAuditCapture(t *testing.T) *[]models.AuditLog {
 	return &entries
 }
 
+func withLoanFileMetadataStub(t *testing.T, file *models.LoanFile, err error) {
+	t.Helper()
+
+	prevLoader := loadLoanFileMetadata
+	t.Cleanup(func() {
+		loadLoanFileMetadata = prevLoader
+	})
+
+	loadLoanFileMetadata = func(filename string) (*models.LoanFile, error) {
+		if err != nil {
+			return nil, err
+		}
+		if file == nil {
+			return nil, fiber.ErrNotFound
+		}
+		copyFile := *file
+		return &copyFile, nil
+	}
+}
+
 func newTokenForTests(t *testing.T, username string) string {
 	t.Helper()
 	token, err := createJWTToken(username, "test-session")
@@ -185,6 +205,7 @@ func TestRequireLoanAccessAllowsOwnerForOwnLoan(t *testing.T) {
 
 func TestRequireFileAccessRejectsUnknownFilenameForLoan(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "570639", CarInsuranceFile: "12_123_policy.pdf"}, models.RoleOfficer)
+	withLoanFileMetadataStub(t, nil, fiber.ErrNotFound)
 	logs := withAuditCapture(t)
 
 	app := fiber.New()
@@ -207,8 +228,61 @@ func TestRequireFileAccessRejectsUnknownFilenameForLoan(t *testing.T) {
 	if (*logs)[0].Action != "deny_file_access" {
 		t.Fatalf("audit action = %q, want %q", (*logs)[0].Action, "deny_file_access")
 	}
-	if !strings.Contains((*logs)[0].Detail, "filename=12_999_other.pdf") || !strings.Contains((*logs)[0].Detail, "reason=file_not_linked") {
+	if !strings.Contains((*logs)[0].Detail, "filename=12_999_other.pdf") || !strings.Contains((*logs)[0].Detail, "reason=legacy_file_not_linked") {
 		t.Fatalf("audit detail = %q, want denied file access detail", (*logs)[0].Detail)
+	}
+}
+
+func TestRequireFileAccessUsesMetadataForExactLoanMatch(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "570639", CarInsuranceFile: "12_123_policy.pdf"}, models.RoleOfficer)
+	withLoanFileMetadataStub(t, &models.LoanFile{
+		LoanID:     12,
+		StorageKey: "12_123_policy.pdf",
+	}, nil)
+
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		loan, err := requireFileAccess(c, "12_123_policy.pdf")
+		if err != nil {
+			t.Fatalf("requireFileAccess() unexpected error: %v", err)
+		}
+		if loan.ID != 12 {
+			t.Fatalf("requireFileAccess() loan ID = %d, want %d", loan.ID, 12)
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "570639")})
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+}
+
+func TestRequireFileAccessRejectsMetadataMismatch(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "570639", CarInsuranceFile: "12_other_policy.pdf"}, models.RoleOfficer)
+	withLoanFileMetadataStub(t, &models.LoanFile{
+		LoanID:     12,
+		StorageKey: "12_123_policy.pdf",
+	}, nil)
+	logs := withAuditCapture(t)
+
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		_, err := requireFileAccess(c, "12_123_policy.pdf")
+		if err != fiber.ErrNotFound {
+			t.Fatalf("requireFileAccess() error = %v, want %v", err, fiber.ErrNotFound)
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "570639")})
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	if len(*logs) != 1 || !strings.Contains((*logs)[0].Detail, "reason=metadata_mismatch") {
+		t.Fatalf("audit logs = %+v, want metadata_mismatch entry", *logs)
 	}
 }
 

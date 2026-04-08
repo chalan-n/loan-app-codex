@@ -410,6 +410,15 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 	}
 
 	config.DB.Save(&loan)
+	if err := createLoanFileMetadata(&models.LoanFile{
+		LoanID:       loan.ID,
+		StorageKey:   filename,
+		OriginalName: fileHeader.Filename,
+		Category:     models.LoanFileCategoryCarInsurance,
+		UploadedBy:   parseJWTUsername(c.Cookies("token")),
+	}); err != nil {
+		log.Printf("loan file metadata create error for %s: %v", filename, err)
+	}
 
 	return c.JSON(fiber.Map{
 		"message":  "Upload success",
@@ -501,6 +510,9 @@ func DeleteInsuranceFile(c *fiber.Ctx) error {
 	if found {
 		loan.CarInsuranceFile = strings.Join(newFiles, ",")
 		config.DB.Save(&loan)
+		if err := deleteLoanFileMetadata(loan.ID, req.Filename); err != nil {
+			log.Printf("loan file metadata delete error for %s: %v", req.Filename, err)
+		}
 		return c.JSON(fiber.Map{"message": "File deleted"})
 	}
 

@@ -98,7 +98,7 @@ func main() {
 	config.ConnectDB()
 
 	// === AutoMigrate — run once at startup ===
-	config.DB.AutoMigrate(&models.Guarantor{}, &models.RefRunning{})
+	config.DB.AutoMigrate(&models.Guarantor{}, &models.RefRunning{}, &models.LoanFile{})
 	// =============================================
 
 	// === WebAuthn Init ===

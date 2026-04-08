@@ -17,5 +17,5 @@ func ConnectDB() {
 		panic("เชื่อม DB ไม่ได้: " + err.Error())
 	}
 	DB = db
-	db.AutoMigrate(&models.User{}, &models.LoanApplication{}, &models.Guarantor{}, &models.AuditLog{}, &models.WebAuthnCredential{})
+	db.AutoMigrate(&models.User{}, &models.LoanApplication{}, &models.Guarantor{}, &models.AuditLog{}, &models.WebAuthnCredential{}, &models.LoanFile{})
 }
