@@ -5,12 +5,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"loan-app/models"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
 )
 
 func withLoanStubs(t *testing.T, loan *models.LoanApplication, role string) {
@@ -73,6 +76,24 @@ func formBody(values map[string]string) string {
 	return data.Encode()
 }
 
+func newAppWithTemplates(t *testing.T, files map[string]string) *fiber.App {
+	t.Helper()
+
+	dir := t.TempDir()
+	for name, contents := range files {
+		fullPath := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatalf("MkdirAll() error: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte(contents), 0o644); err != nil {
+			t.Fatalf("WriteFile() error: %v", err)
+		}
+	}
+
+	engine := html.New(dir, ".html")
+	return fiber.New(fiber.Config{Views: engine})
+}
+
 func TestRequireLoanAccessRejectsDifferentOfficer(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 7, StaffID: "owner"}, models.RoleOfficer)
 
@@ -109,6 +130,28 @@ func TestRequireLoanAccessAllowsAdminForOtherUsersLoan(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "admin-user")})
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+}
+
+func TestRequireLoanAccessAllowsOwnerForOwnLoan(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 7, StaffID: "owner"}, models.RoleOfficer)
+
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		loan, err := requireLoanAccess(c, 7)
+		if err != nil {
+			t.Fatalf("requireLoanAccess() unexpected error: %v", err)
+		}
+		if loan.StaffID != "owner" {
+			t.Fatalf("requireLoanAccess() returned staff %q, want %q", loan.StaffID, "owner")
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "owner")})
 	if _, err := app.Test(req); err != nil {
 		t.Fatalf("app.Test() error: %v", err)
 	}
@@ -187,6 +230,93 @@ func TestGetFileReturnsRedirectForAccessibleLoanFile(t *testing.T) {
 	}
 	if got := resp.Header.Get("Location"); got != "https://example.com/presigned" {
 		t.Fatalf("GetFile redirect = %q, want %q", got, "https://example.com/presigned")
+	}
+}
+
+func TestGetFileAllowsAdminForOtherUsersLoanFile(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner", CarInsuranceFile: "12_123_policy.pdf"}, models.RoleAdmin)
+
+	prevPresign := presignFileURL
+	t.Cleanup(func() { presignFileURL = prevPresign })
+	presignFileURL = func(filename string) (string, error) {
+		if filename != "12_123_policy.pdf" {
+			t.Fatalf("presignFileURL filename = %q, want %q", filename, "12_123_policy.pdf")
+		}
+		return "https://example.com/admin-presigned", nil
+	}
+
+	app := fiber.New()
+	app.Get("/file/:filename", GetFile)
+
+	req := httptest.NewRequest("GET", "/file/12_123_policy.pdf", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "admin-user")})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusFound {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("GetFile status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusFound, string(body))
+	}
+	if got := resp.Header.Get("Location"); got != "https://example.com/admin-presigned" {
+		t.Fatalf("GetFile redirect = %q, want %q", got, "https://example.com/admin-presigned")
+	}
+}
+
+func TestStep1AllowsOwnerToOpenExistingLoan(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner", FirstName: "Jane"}, models.RoleOfficer)
+
+	app := newAppWithTemplates(t, map[string]string{
+		"step1.html": `{{index . "title"}}|{{.Loan.ID}}|{{.Loan.FirstName}}`,
+	})
+	app.Get("/step1", Step1)
+
+	req := httptest.NewRequest("GET", "/step1?id=12", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "owner")})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Step1 status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusOK, string(body))
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Step 1|12|Jane") {
+		t.Fatalf("Step1 body = %q, want rendered loan details", string(body))
+	}
+	if setCookie := resp.Header.Values("Set-Cookie"); len(setCookie) == 0 {
+		t.Fatalf("Step1 should set loan_id cookie")
+	}
+}
+
+func TestStep1AllowsAdminToOpenOtherUsersLoan(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 18, StaffID: "owner", FirstName: "AdminView"}, models.RoleAdmin)
+
+	app := newAppWithTemplates(t, map[string]string{
+		"step1.html": `{{index . "title"}}|{{.Loan.ID}}|{{.Loan.FirstName}}`,
+	})
+	app.Get("/step1", Step1)
+
+	req := httptest.NewRequest("GET", "/step1?id=18", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: newTokenForTests(t, "admin-user")})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Step1 status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusOK, string(body))
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Step 1|18|AdminView") {
+		t.Fatalf("Step1 body = %q, want rendered loan details", string(body))
 	}
 }
 
@@ -382,4 +512,45 @@ func TestGuarantorRoutesRejectDifferentOfficer(t *testing.T) {
 			t.Fatalf("DeleteGuarantor status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusForbidden, string(body))
 		}
 	})
+}
+
+func TestAddGuarantorGetAllowsOwnerAndAdmin(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		role     string
+	}{
+		{name: "owner", username: "owner", role: models.RoleOfficer},
+		{name: "admin", username: "admin-user", role: models.RoleAdmin},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, tc.role)
+
+			app := newAppWithTemplates(t, map[string]string{
+				"add_guarantor.html": `{{.LoanID}}|{{.IsEdit}}`,
+			})
+			app.Get("/guarantor", AddGuarantorGetV2)
+
+			resp := doRequestWithCookies(
+				t,
+				app,
+				http.MethodGet,
+				"/guarantor?loan_id=12",
+				"",
+				&http.Cookie{Name: "token", Value: newTokenForTests(t, tc.username)},
+			)
+			defer resp.Body.Close()
+
+			if resp.StatusCode != fiber.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("AddGuarantorGetV2 status = %d, want %d; body=%s", resp.StatusCode, fiber.StatusOK, string(body))
+			}
+			body, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(body), "12|false") {
+				t.Fatalf("AddGuarantorGetV2 body = %q, want rendered loan access", string(body))
+			}
+		})
+	}
 }
