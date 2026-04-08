@@ -42,7 +42,7 @@ func RequireManagerOrAbove() fiber.Handler {
 
 		if c.Get("Accept") == "application/json" || len(c.Get("X-API-Key")) > 0 {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "เนเธกเนเธกเธตเธชเธดเธ—เธเธดเนเน€เธเนเธฒเธ–เธถเธ",
+				"error": "ไม่มีสิทธิ์เข้าถึง",
 			})
 		}
 
