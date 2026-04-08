@@ -8,6 +8,7 @@ import (
 	"loan-app/migrations"
 	"loan-app/models"
 	"loan-app/routes"
+	"loan-app/startup"
 	"log"
 	"net"
 	"os"
@@ -108,6 +109,11 @@ func main() {
 		return
 	}
 
+	if err := startup.Verify(config.GetConfig(), config.DB); err != nil {
+		log.Fatalf("[startup] health check failed: %v", err)
+	}
+	log.Println("[startup] health checks passed")
+
 	// === WebAuthn Init ===
 	waCfg := config.GetConfig()
 	if err := handlers.InitWebAuthn(waCfg.WebAuthnRPID, waCfg.WebAuthnOrigin, "CMO APP"); err != nil {
@@ -115,6 +121,11 @@ func main() {
 	}
 	log.Printf("[webauthn] ✅ RPID=%s Origin=%s", waCfg.WebAuthnRPID, waCfg.WebAuthnOrigin)
 	// =====================
+
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		log.Println("[startup] healthcheck completed; exiting without starting server")
+		return
+	}
 
 	// === Seed default users with roles ===
 	defaultPass := config.GetConfig().DefaultAdminPassword

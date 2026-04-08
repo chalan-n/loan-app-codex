@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 required_files=(
   "config/database.go"
   "main.go"
+  "startup/health.go"
   "models/user.go"
   "models/loan_file.go"
   "models/schema_migration.go"
@@ -35,6 +36,12 @@ fi
 echo "[predeploy] checking migrations entrypoint..."
 if ! grep -q "migrations.Run" main.go; then
   echo "[predeploy] main.go does not run migrations" >&2
+  exit 1
+fi
+
+echo "[predeploy] checking startup verification entrypoint..."
+if ! grep -q "startup.Verify" main.go; then
+  echo "[predeploy] main.go does not run startup verification" >&2
   exit 1
 fi
 
