@@ -1,29 +1,29 @@
 # Database Migrations
 
-โปรเจ็กต์นี้ใช้ versioned migrations ผ่าน package `migrations/` และตาราง `schema_migrations`
+This project uses versioned migrations via `migrations/` and the `schema_migrations` table.
 
-## คำสั่ง
+## Commands
 
-รันเฉพาะ migration แล้วออก:
+Run only migrations and exit:
 
 ```bash
 ./loan-app-linux migrate
 ```
 
-รันแอปตามปกติ:
+Run the application normally:
 
 ```bash
 ./loan-app-linux
 ```
 
-ตอนเริ่มแอป ระบบจะตรวจและรัน pending migrations ให้อัตโนมัติ
+On startup, the app checks and applies pending migrations automatically.
 
-## ตารางที่ใช้ติดตาม
+## Tracking Table
 
 - `schema_migrations`
 
-## แนวทางเพิ่ม migration ใหม่
+## Adding a New Migration
 
-1. เพิ่มรายการใหม่ใน `migrations/migrations.go`
-2. ใช้ version แบบเรียงลำดับ เช่น `2026040803`
-3. ห้ามแก้ migration ที่ deploy ไปแล้ว ให้เพิ่มรายการใหม่แทน
+1. Add a new entry in `migrations/migrations.go`.
+2. Use an ordered version such as `2026040803`.
+3. Do not edit migrations that were already deployed. Add a new one instead.
