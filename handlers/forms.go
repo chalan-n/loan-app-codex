@@ -390,9 +390,12 @@ func Step2(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			loan = *accessibleLoan
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		loan = *accessibleLoan
 	}
 
 	var carKinds []models.CarKind
@@ -470,9 +473,12 @@ func Step3(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			loan = *accessibleLoan
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		loan = *accessibleLoan
 	}
 	return c.Render("step3", fiber.Map{
 		"title": "Step 3",
@@ -572,9 +578,12 @@ func Step4(c *fiber.Ctx) error {
 
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			config.DB.Preload("Guarantors", "deleted_at IS NULL").First(&loan, accessibleLoan.ID)
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		config.DB.Preload("Guarantors", "deleted_at IS NULL").First(&loan, accessibleLoan.ID)
 	}
 	return c.Render("step4", fiber.Map{
 		"title": "Step 4",
@@ -635,9 +644,12 @@ func Step5(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			loan = *accessibleLoan
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		loan = *accessibleLoan
 	}
 	return c.Render("step5", fiber.Map{
 		"title": "Step 5",
@@ -709,9 +721,12 @@ func Step6(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			loan = *accessibleLoan
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		loan = *accessibleLoan
 	}
 	return c.Render("step6", fiber.Map{
 		"title": "Step 6",
@@ -756,9 +771,12 @@ func Step7(c *fiber.Ctx) error {
 	loanID := c.Cookies("loan_id")
 	var loan models.LoanApplication
 	if loanID != "" {
-		if accessibleLoan, err := requireLoanAccess(c, loanID); err == nil {
-			loan = *accessibleLoan
+		accessibleLoan, err := requireLoanAccess(c, loanID)
+		if err != nil {
+			c.ClearCookie("loan_id")
+			return c.Redirect("/step1")
 		}
+		loan = *accessibleLoan
 	}
 	return c.Render("step7", fiber.Map{
 		"title": "Step 7",

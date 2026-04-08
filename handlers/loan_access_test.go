@@ -454,6 +454,52 @@ func TestRestrictedStepPostsRedirectWhenLoanBelongsToAnotherOfficer(t *testing.T
 	}
 }
 
+func TestRestrictedStepGetsRedirectWhenLoanBelongsToAnotherOfficer(t *testing.T) {
+	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
+
+	tests := []struct {
+		name   string
+		target string
+		path   string
+		h      fiber.Handler
+	}{
+		{name: "step2", path: "/step2", target: "/step2", h: Step2},
+		{name: "step3", path: "/step3", target: "/step3", h: Step3},
+		{name: "step4", path: "/step4", target: "/step4?id=12", h: Step4},
+		{name: "step5", path: "/step5", target: "/step5", h: Step5},
+		{name: "step6", path: "/step6", target: "/step6", h: Step6},
+		{name: "step7", path: "/step7", target: "/step7", h: Step7},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Get(tc.path, tc.h)
+
+			resp := doRequestWithCookies(
+				t,
+				app,
+				http.MethodGet,
+				tc.target,
+				"",
+				&http.Cookie{Name: "token", Value: newTokenForTests(t, "other-user")},
+				&http.Cookie{Name: "loan_id", Value: "12"},
+			)
+			defer resp.Body.Close()
+
+			if resp.StatusCode != fiber.StatusFound {
+				t.Fatalf("%s status = %d, want %d", tc.name, resp.StatusCode, fiber.StatusFound)
+			}
+			if got := resp.Header.Get("Location"); got != "/step1" {
+				t.Fatalf("%s redirect = %q, want %q", tc.name, got, "/step1")
+			}
+			if setCookie := strings.ToLower(strings.Join(resp.Header.Values("Set-Cookie"), " ")); !strings.Contains(setCookie, "loan_id=") {
+				t.Fatalf("%s should clear loan_id cookie, got %q", tc.name, setCookie)
+			}
+		})
+	}
+}
+
 func TestDeleteLoanRejectsDifferentOfficer(t *testing.T) {
 	withLoanStubs(t, &models.LoanApplication{ID: 12, StaffID: "owner"}, models.RoleOfficer)
 
