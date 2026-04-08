@@ -3,6 +3,7 @@ package handlers
 import (
 	"loan-app/config"
 	"loan-app/models"
+	"loan-app/services"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -48,12 +49,7 @@ func LoginPost(c *fiber.Ctx) error {
 
 func createJWTToken(username, sessionID string) (string, error) {
 	now := sessionNow()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username":   username,
-		"session_id": sessionID,
-		"iat":        now.Unix(),
-		"exp":        now.Add(24 * time.Hour).Unix(),
-	})
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, services.BuildSessionClaims(username, sessionID, now, 24*time.Hour))
 	return token.SignedString([]byte(config.GetConfig().JWTSecret))
 }
 
@@ -88,17 +84,17 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	}
 
 	now := sessionNow()
-	if user.SessionRevokedAt != nil && issuedAt.Before(user.SessionRevokedAt.UTC()) {
+	if services.IsSessionRevoked(issuedAt, user.SessionRevokedAt) {
 		clearAuthCookie(c)
 		return c.Redirect("/login")
 	}
-	if user.SessionLastActivityAt == nil || now.Sub(user.SessionLastActivityAt.UTC()) > sessionIdleTimeout() {
+	if services.IsSessionTimedOut(user.SessionLastActivityAt, now, sessionIdleTimeout()) {
 		_ = revokeAllSessionsForUser(username, now)
 		WriteAuditAs(c, username, "session_timeout", "", "idle timeout exceeded")
 		clearAuthCookie(c)
 		return c.Redirect("/login?error=session_expired")
 	}
-	if now.Sub(user.SessionLastActivityAt.UTC()) >= sessionActivityRefreshInterval() {
+	if services.ShouldRefreshSessionActivity(user.SessionLastActivityAt, now, sessionActivityRefreshInterval()) {
 		_ = touchSessionActivity(username, now)
 	}
 

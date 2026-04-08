@@ -3,13 +3,11 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"loan-app/config"
 	"loan-app/models"
-	"strconv"
-	"strings"
+	"loan-app/services"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -125,21 +123,7 @@ func parseJWTIssuedAt(tokenStr string) (time.Time, bool) {
 	if !ok {
 		return time.Time{}, false
 	}
-
-	switch value := claims["iat"].(type) {
-	case float64:
-		return time.Unix(int64(value), 0).UTC(), true
-	case int64:
-		return time.Unix(value, 0).UTC(), true
-	case json.Number:
-		v, err := value.Int64()
-		if err != nil {
-			return time.Time{}, false
-		}
-		return time.Unix(v, 0).UTC(), true
-	default:
-		return time.Time{}, false
-	}
+	return services.ParseIssuedAtClaim(claims)
 }
 
 func newSessionID() string {
@@ -202,7 +186,7 @@ func requireLoanAccess(c *fiber.Ctx, loanID interface{}) (*models.LoanApplicatio
 	}
 
 	role := lookupUserRole(username)
-	if role == models.RoleAdmin || role == models.RoleManager || loan.StaffID == username {
+	if services.CanAccessLoan(role, username, loan) {
 		return loan, nil
 	}
 
@@ -211,26 +195,11 @@ func requireLoanAccess(c *fiber.Ctx, loanID interface{}) (*models.LoanApplicatio
 }
 
 func loanIDFromFilename(filename string) (int, bool) {
-	prefix, _, found := strings.Cut(filename, "_")
-	if !found || prefix == "" {
-		return 0, false
-	}
-
-	loanID, err := strconv.Atoi(prefix)
-	if err != nil || loanID <= 0 {
-		return 0, false
-	}
-
-	return loanID, true
+	return services.LoanIDFromFilename(filename)
 }
 
 func loanHasFile(loan *models.LoanApplication, filename string) bool {
-	for _, file := range strings.Split(loan.CarInsuranceFile, ",") {
-		if strings.TrimSpace(file) == filename {
-			return true
-		}
-	}
-	return false
+	return services.LoanHasFile(loan, filename)
 }
 
 func requireFileAccess(c *fiber.Ctx, filename string) (*models.LoanApplication, error) {
