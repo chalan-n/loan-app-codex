@@ -28,6 +28,7 @@ func Setup(app *fiber.App) {
 
 	app.Get("/change-password", handlers.ChangePasswordPage)
 	app.Post("/change-password", handlers.ChangePasswordPost)
+	app.Post("/session/revoke-all", handlers.RevokeAllSessions)
 
 	app.Get("/", handlers.LoginPage)
 	app.Get("/main", handlers.MainPage)

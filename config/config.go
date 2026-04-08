@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -27,7 +28,9 @@ type AppConfig struct {
 	CORSAllowOrigins string
 
 	// JWT
-	JWTSecret string
+	JWTSecret                     string
+	SessionIdleTimeoutMinutes     int
+	SessionActivityRefreshSeconds int
 
 	// Mobile API
 	MobileAPIKey string
@@ -77,7 +80,9 @@ func GetConfig() *AppConfig {
 		AppEnv:           getEnv("APP_ENV", "development"),
 		CORSAllowOrigins: getEnv("CORS_ALLOW_ORIGINS", "*"),
 
-		JWTSecret: getEnv("JWT_SECRET", "changeme-secret"),
+		JWTSecret:                     getEnv("JWT_SECRET", "changeme-secret"),
+		SessionIdleTimeoutMinutes:     getEnvInt("SESSION_IDLE_TIMEOUT_MINUTES", 30),
+		SessionActivityRefreshSeconds: getEnvInt("SESSION_ACTIVITY_REFRESH_SECONDS", 300),
 
 		MobileAPIKey: getEnv("MOBILE_API_KEY", ""),
 
@@ -155,6 +160,15 @@ func (c *AppConfig) IsProd() bool {
 func getEnv(key, fallback string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if val := os.Getenv(key); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			return parsed
+		}
 	}
 	return fallback
 }

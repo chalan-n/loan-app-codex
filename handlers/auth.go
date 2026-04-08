@@ -47,10 +47,12 @@ func LoginPost(c *fiber.Ctx) error {
 }
 
 func createJWTToken(username, sessionID string) (string, error) {
+	now := sessionNow()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username":   username,
 		"session_id": sessionID,
-		"exp":        time.Now().Add(24 * time.Hour).Unix(),
+		"iat":        now.Unix(),
+		"exp":        now.Add(24 * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(config.GetConfig().JWTSecret))
 }
@@ -59,7 +61,7 @@ func Logout(c *fiber.Ctx) error {
 	WriteAudit(c, "logout", "", "ออกจากระบบ")
 	username := parseJWTUsername(c.Cookies("token"))
 	if username != "" {
-		config.DB.Model(&models.User{}).Where("username = ?", username).Update("current_session_id", "")
+		_ = revokeAllSessionsForUser(username, sessionNow())
 	}
 	clearAuthCookie(c)
 	return c.Redirect("/login")
@@ -73,15 +75,31 @@ func AuthMiddleware(c *fiber.Ctx) error {
 
 	username := parseJWTUsername(tokenStr)
 	sessionID := parseJWTSessionID(tokenStr)
-	if username == "" || sessionID == "" {
+	issuedAt, issuedAtOK := parseJWTIssuedAt(tokenStr)
+	if username == "" || sessionID == "" || !issuedAtOK {
 		clearAuthCookie(c)
 		return c.Redirect("/login")
 	}
 
-	var user models.User
-	if err := config.DB.Select("username, current_session_id").Where("username = ?", username).First(&user).Error; err != nil || user.CurrentSessionID == "" || user.CurrentSessionID != sessionID {
+	user, err := loadSessionUser(username)
+	if err != nil || user.CurrentSessionID == "" || user.CurrentSessionID != sessionID {
 		clearAuthCookie(c)
 		return c.Redirect("/login")
+	}
+
+	now := sessionNow()
+	if user.SessionRevokedAt != nil && issuedAt.Before(user.SessionRevokedAt.UTC()) {
+		clearAuthCookie(c)
+		return c.Redirect("/login")
+	}
+	if user.SessionLastActivityAt == nil || now.Sub(user.SessionLastActivityAt.UTC()) > sessionIdleTimeout() {
+		_ = revokeAllSessionsForUser(username, now)
+		WriteAuditAs(c, username, "session_timeout", "", "idle timeout exceeded")
+		clearAuthCookie(c)
+		return c.Redirect("/login?error=session_expired")
+	}
+	if now.Sub(user.SessionLastActivityAt.UTC()) >= sessionActivityRefreshInterval() {
+		_ = touchSessionActivity(username, now)
 	}
 
 	c.Locals("username", username)
@@ -120,13 +138,32 @@ func ChangePasswordPost(c *fiber.Ctx) error {
 	}
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(newPassword), 14)
+	now := sessionNow()
 	user.Password = string(hashedPassword)
 	user.CurrentSessionID = ""
+	user.SessionLastActivityAt = nil
+	user.SessionRevokedAt = &now
 
 	if err := config.DB.Save(&user).Error; err != nil {
 		return c.JSON(fiber.Map{"success": false, "message": "บันทึกข้อมูลไม่สำเร็จ"})
 	}
 
+	WriteAuditAs(c, username, "change_password", "", "password changed and all sessions revoked")
 	clearAuthCookie(c)
 	return c.JSON(fiber.Map{"success": true, "message": "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว"})
+}
+
+func RevokeAllSessions(c *fiber.Ctx) error {
+	username := parseJWTUsername(c.Cookies("token"))
+	if username == "" {
+		return c.Status(401).JSON(fiber.Map{"success": false, "message": "Unauthorized"})
+	}
+
+	if err := revokeAllSessionsForUser(username, sessionNow()); err != nil {
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Unable to revoke sessions"})
+	}
+
+	WriteAuditAs(c, username, "revoke_all_sessions", "", "revoked all devices")
+	clearAuthCookie(c)
+	return c.JSON(fiber.Map{"success": true, "redirect": "/login"})
 }

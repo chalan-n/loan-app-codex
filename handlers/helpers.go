@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"loan-app/config"
@@ -25,6 +26,50 @@ var (
 	}
 	lookupUserRole = func(username string) string {
 		return getUserRole(username)
+	}
+	loadSessionUser = func(username string) (*models.User, error) {
+		var user models.User
+		if err := config.DB.Select("id, username, current_session_id, session_last_activity_at, session_revoked_at").
+			Where("username = ?", username).
+			First(&user).Error; err != nil {
+			return nil, err
+		}
+		return &user, nil
+	}
+	persistIssuedSession = func(user *models.User, sessionID string, now time.Time) error {
+		user.CurrentSessionID = sessionID
+		user.SessionLastActivityAt = &now
+		user.SessionRevokedAt = nil
+		return config.DB.Model(user).
+			Where("id = ?", user.ID).
+			Updates(map[string]interface{}{
+				"current_session_id":       sessionID,
+				"session_last_activity_at": now,
+				"session_revoked_at":       nil,
+			}).Error
+	}
+	touchSessionActivity = func(username string, now time.Time) error {
+		return config.DB.Model(&models.User{}).
+			Where("username = ?", username).
+			Update("session_last_activity_at", now).Error
+	}
+	revokeAllSessionsForUser = func(username string, now time.Time) error {
+		return config.DB.Model(&models.User{}).
+			Where("username = ?", username).
+			Updates(map[string]interface{}{
+				"current_session_id":       "",
+				"session_last_activity_at": nil,
+				"session_revoked_at":       now,
+			}).Error
+	}
+	sessionNow = func() time.Time {
+		return time.Now().UTC()
+	}
+	sessionIdleTimeout = func() time.Duration {
+		return time.Duration(config.GetConfig().SessionIdleTimeoutMinutes) * time.Minute
+	}
+	sessionActivityRefreshInterval = func() time.Duration {
+		return time.Duration(config.GetConfig().SessionActivityRefreshSeconds) * time.Second
 	}
 )
 
@@ -75,6 +120,28 @@ func parseJWTSessionID(tokenStr string) string {
 	return sessionID
 }
 
+func parseJWTIssuedAt(tokenStr string) (time.Time, bool) {
+	claims, ok := parseJWTClaims(tokenStr)
+	if !ok {
+		return time.Time{}, false
+	}
+
+	switch value := claims["iat"].(type) {
+	case float64:
+		return time.Unix(int64(value), 0).UTC(), true
+	case int64:
+		return time.Unix(value, 0).UTC(), true
+	case json.Number:
+		v, err := value.Int64()
+		if err != nil {
+			return time.Time{}, false
+		}
+		return time.Unix(v, 0).UTC(), true
+	default:
+		return time.Time{}, false
+	}
+}
+
 func newSessionID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -89,10 +156,8 @@ func issueUserSession(user *models.User) (string, error) {
 		return "", errors.New("failed to generate session id")
 	}
 
-	user.CurrentSessionID = sessionID
-	if err := config.DB.Model(user).
-		Where("id = ?", user.ID).
-		Update("current_session_id", sessionID).Error; err != nil {
+	now := sessionNow()
+	if err := persistIssuedSession(user, sessionID, now); err != nil {
 		return "", err
 	}
 
