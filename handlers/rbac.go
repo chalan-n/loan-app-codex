@@ -34,7 +34,20 @@ func RequireRole(roles ...string) fiber.Handler {
 
 // RequireManagerOrAbove อนุญาต manager และ admin
 func RequireManagerOrAbove() fiber.Handler {
-	return RequireRole(models.RoleManager, models.RoleAdmin)
+	return func(c *fiber.Ctx) error {
+		role := getUserRole(parseJWTUsername(c.Cookies("token")))
+		if models.IsManagerOrAbove(role) {
+			return c.Next()
+		}
+
+		if c.Get("Accept") == "application/json" || len(c.Get("X-API-Key")) > 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "เนเธกเนเธกเธตเธชเธดเธ—เธเธดเนเน€เธเนเธฒเธ–เธถเธ",
+			})
+		}
+
+		return c.Redirect("/main?error=forbidden")
+	}
 }
 
 // RequireAdmin อนุญาตเฉพาะ admin

@@ -53,5 +53,5 @@ func getUserRole(username string) string {
 	if err := config.DB.Select("role").Where("username = ?", username).First(&user).Error; err != nil {
 		return models.RoleOfficer
 	}
-	return user.Role
+	return models.NormalizeRole(user.Role)
 }

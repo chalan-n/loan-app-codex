@@ -636,13 +636,13 @@ func UpdateStatus(c *fiber.Ctx) error {
 		borrowerName = loan.RefCode
 	}
 	switch loan.Status {
-	case "A":
+	case models.LoanStatusApproved:
 		BroadcastToStaff(loan.StaffID, "Loan approved",
 			fmt.Sprintf("Ref %s - %s has been approved", loan.RefCode, borrowerName))
-	case "R":
+	case models.LoanStatusRejected:
 		BroadcastToStaff(loan.StaffID, "Loan rejected",
 			fmt.Sprintf("Ref %s - %s has been rejected", loan.RefCode, borrowerName))
-	case "C":
+	case models.LoanStatusConditional:
 		BroadcastToStaff(loan.StaffID, "Additional conditions required",
 			fmt.Sprintf("Ref %s - %s requires additional conditions", loan.RefCode, borrowerName))
 	}

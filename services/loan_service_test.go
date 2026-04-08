@@ -94,6 +94,9 @@ func TestLoanServiceCreateStep1CreatesDraftWithRefCode(t *testing.T) {
 	if loan.RefCode != "20260013" {
 		t.Fatalf("ref_code = %q, want %q", loan.RefCode, "20260013")
 	}
+	if loan.Status != models.LoanStatusDraft {
+		t.Fatalf("status = %q, want %q", loan.Status, models.LoanStatusDraft)
+	}
 	if repo.createdLoan == nil || repo.createdLoan.StaffID != "570639" {
 		t.Fatalf("created loan = %+v, want saved draft for staff", repo.createdLoan)
 	}
@@ -138,8 +141,8 @@ func TestLoanServiceUpdateStatusDefaultsToPending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateStatus() error: %v", err)
 	}
-	if loan.Status != "P" {
-		t.Fatalf("status = %q, want %q", loan.Status, "P")
+	if loan.Status != models.LoanStatusPending {
+		t.Fatalf("status = %q, want %q", loan.Status, models.LoanStatusPending)
 	}
 	if loan.SubmittedDate == "" {
 		t.Fatal("submitted date should be set for pending status")

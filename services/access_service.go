@@ -12,7 +12,7 @@ func CanAccessLoan(role, username string, loan *models.LoanApplication) bool {
 		return false
 	}
 
-	return role == models.RoleAdmin || role == models.RoleManager || loan.StaffID == username
+	return models.IsManagerOrAbove(role) || loan.StaffID == username
 }
 
 // LoanIDFromFilename extracts the loan ID prefix from stored filenames like "<loanID>_...".

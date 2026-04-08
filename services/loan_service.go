@@ -359,7 +359,7 @@ func (s *LoanService) CreateStep1(staffID string, input Step1Input) (*models.Loa
 
 	loan := &models.LoanApplication{
 		RefCode: refCode,
-		Status:  "D",
+		Status:  models.LoanStatusDraft,
 	}
 	if err := s.UpdateStep1(loan, staffID, input); err != nil {
 		return nil, err
@@ -508,7 +508,7 @@ func (s *LoanService) UpdateStep7(loan *models.LoanApplication, input Step7Input
 	loan.TaxDistrict = input.TaxDistrict
 	loan.TaxSubdistrict = input.TaxSubdistrict
 	loan.TaxZipcode = input.TaxZipcode
-	loan.Status = "D"
+	loan.Status = models.LoanStatusDraft
 	loan.LastUpdateDate = timestampString(s.now())
 	return s.repo.SaveLoan(loan)
 }
@@ -518,12 +518,9 @@ func (s *LoanService) UpdateStatus(refCode, status string) (*models.LoanApplicat
 	if err != nil {
 		return nil, err
 	}
-	if status == "" {
-		status = "P"
-	}
-	loan.Status = status
+	loan.Status = models.NormalizeLoanStatus(status)
 	loan.LastUpdateDate = timestampString(s.now())
-	if status == "P" {
+	if loan.Status == models.LoanStatusPending {
 		loan.SubmittedDate = timestampString(s.now())
 	}
 	if err := s.repo.SaveLoan(loan); err != nil {

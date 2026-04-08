@@ -71,12 +71,7 @@ func AdminUpdateUserRole(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
-	validRoles := map[string]bool{
-		models.RoleOfficer: true,
-		models.RoleManager: true,
-		models.RoleAdmin:   true,
-	}
-	if !validRoles[req.Role] {
+	if !models.IsValidRole(req.Role) {
 		return c.Status(400).JSON(fiber.Map{"error": "Role ไม่ถูกต้อง"})
 	}
 
@@ -97,14 +92,7 @@ func AdminCreateUser(c *fiber.Ctx) error {
 	if username == "" || password == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "กรุณากรอก username และ password"})
 	}
-	validRoles := map[string]bool{
-		models.RoleOfficer: true,
-		models.RoleManager: true,
-		models.RoleAdmin:   true,
-	}
-	if !validRoles[role] {
-		role = models.RoleOfficer
-	}
+	role = models.NormalizeRole(role)
 
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(password), 12)
 	user := models.User{Username: username, Password: string(hashed), Role: role}
@@ -157,9 +145,9 @@ func ManagerDashboard(c *fiber.Ctx) error {
 	config.DB.Model(&models.LoanApplication{}).Count(&totalLoans)
 	config.DB.Model(&models.LoanApplication{}).Where("DATE(submitted_date) = ?", today).Count(&todayLoans)
 	config.DB.Model(&models.LoanApplication{}).Where("submitted_date >= ?", firstDayOfMonth).Count(&monthLoans)
-	config.DB.Model(&models.LoanApplication{}).Where("status = 'P'").Count(&pendingLoans)
-	config.DB.Model(&models.LoanApplication{}).Where("status = 'A'").Count(&approvedLoans)
-	config.DB.Model(&models.LoanApplication{}).Where("status = 'R'").Count(&rejectedLoans)
+	config.DB.Model(&models.LoanApplication{}).Where("status = ?", models.LoanStatusPending).Count(&pendingLoans)
+	config.DB.Model(&models.LoanApplication{}).Where("status = ?", models.LoanStatusApproved).Count(&approvedLoans)
+	config.DB.Model(&models.LoanApplication{}).Where("status = ?", models.LoanStatusRejected).Count(&rejectedLoans)
 
 	// ยอดสินเชื่อรวมเดือนนี้
 	type SumResult struct {

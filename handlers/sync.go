@@ -39,7 +39,7 @@ func UpdateSyncStatus(c *fiber.Ctx) error {
 	// Status -> P
 	if err := config.DB.Model(&loan).Updates(map[string]interface{}{
 		"sync_status": "PENDING",
-		"status":      "P", // P = Pending/Sent
+		"status":      models.LoanStatusPending,
 	}).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update loan status",
