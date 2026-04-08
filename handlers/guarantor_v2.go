@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"loan-app/config"
-	"loan-app/models"
+	"loan-app/services"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -24,6 +24,78 @@ func safeStr(s *string) string {
 	return *s
 }
 
+func guarantorInputFromRequest(c *fiber.Ctx) services.GuarantorInput {
+	companyName := c.FormValue("work_company_name")
+	if c.FormValue("guarantor_type") == "juristic" {
+		companyName = c.FormValue("juristic_company_name")
+	}
+
+	return services.GuarantorInput{
+		GuarantorType:       c.FormValue("guarantor_type"),
+		TradeRegistrationID: c.FormValue("trade_registration_id"),
+		RegistrationDate:    c.FormValue("registration_date"),
+		TaxID:               c.FormValue("tax_id"),
+		Title:               c.FormValue("title"),
+		FirstName:           c.FormValue("first_name"),
+		LastName:            c.FormValue("last_name"),
+		Gender:              c.FormValue("gender"),
+		IdCard:              c.FormValue("id_card"),
+		IdCardIssueDate:     c.FormValue("id_card_issue_date"),
+		IdCardExpiryDate:    c.FormValue("id_card_expiry_date"),
+		DateOfBirth:         c.FormValue("date_of_birth"),
+		Ethnicity:           c.FormValue("ethnicity"),
+		Nationality:         c.FormValue("nationality"),
+		Religion:            c.FormValue("religion"),
+		MaritalStatus:       c.FormValue("marital_status"),
+		MobilePhone:         c.FormValue("mobile_phone"),
+		HouseRegNo:          c.FormValue("house_reg_no"),
+		HouseRegMoo:         c.FormValue("house_reg_moo"),
+		HouseRegSoi:         c.FormValue("house_reg_soi"),
+		HouseRegRoad:        c.FormValue("house_reg_road"),
+		HouseRegProvince:    c.FormValue("house_reg_province"),
+		HouseRegDistrict:    c.FormValue("house_reg_district"),
+		HouseRegSubdistrict: c.FormValue("house_reg_subdistrict"),
+		HouseRegZipcode:     c.FormValue("house_reg_zipcode"),
+		SameAsHouseReg:      c.FormValue("same_as_house_reg") == "on",
+		CurrentNo:           c.FormValue("current_no"),
+		CurrentMoo:          c.FormValue("current_moo"),
+		CurrentSoi:          c.FormValue("current_soi"),
+		CurrentRoad:         c.FormValue("current_road"),
+		CurrentProvince:     c.FormValue("current_province"),
+		CurrentDistrict:     c.FormValue("current_district"),
+		CurrentSubdistrict:  c.FormValue("current_subdistrict"),
+		CurrentZipcode:      c.FormValue("current_zipcode"),
+		CompanyName:         companyName,
+		Occupation:          c.FormValue("occupation"),
+		Position:            c.FormValue("position"),
+		Salary:              parseMoney(c.FormValue("salary")),
+		OtherIncome:         parseMoney(c.FormValue("other_income")),
+		IncomeSource:        c.FormValue("income_source"),
+		WorkPhone:           c.FormValue("work_phone"),
+		WorkNo:              c.FormValue("work_no"),
+		WorkMoo:             c.FormValue("work_moo"),
+		WorkSoi:             c.FormValue("work_soi"),
+		WorkRoad:            c.FormValue("work_road"),
+		WorkProvince:        c.FormValue("work_province"),
+		WorkDistrict:        c.FormValue("work_district"),
+		WorkSubdistrict:     c.FormValue("work_subdistrict"),
+		WorkZipcode:         c.FormValue("work_zipcode"),
+		OtherCardType:       c.FormValue("other_card_type"),
+		OtherCardNumber:     c.FormValue("other_card_number"),
+		OtherCardIssueDate:  c.FormValue("other_card_issue_date"),
+		OtherCardExpiryDate: c.FormValue("other_card_expiry_date"),
+		DocDeliveryType:     c.FormValue("doc_delivery_type"),
+		DocNo:               c.FormValue("doc_no"),
+		DocMoo:              c.FormValue("doc_moo"),
+		DocSoi:              c.FormValue("doc_soi"),
+		DocRoad:             c.FormValue("doc_road"),
+		DocProvince:         c.FormValue("doc_province"),
+		DocDistrict:         c.FormValue("doc_district"),
+		DocSubdistrict:      c.FormValue("doc_subdistrict"),
+		DocZipcode:          c.FormValue("doc_zipcode"),
+	}
+}
+
 func AddGuarantorGetV2(c *fiber.Ctx) error {
 	loanID := c.Query("loan_id")
 	guarantorID := c.Query("guarantor_id")
@@ -38,10 +110,8 @@ func AddGuarantorGetV2(c *fiber.Ctx) error {
 	}
 
 	guarantorData := make(map[string]interface{})
-	var guarantor models.Guarantor
-
 	if guarantorID != "" {
-		if err := config.DB.Where("id = ? AND loan_id = ?", guarantorID, loan.ID).First(&guarantor).Error; err == nil {
+		if guarantor, err := services.FindGuarantorByLoan(config.DB, loan.ID, guarantorID); err == nil {
 			guarantorData["ID"] = guarantor.ID
 			guarantorData["Title"] = guarantor.Title
 			guarantorData["FirstName"] = guarantor.FirstName
@@ -120,101 +190,10 @@ func AddGuarantorPostV2(c *fiber.Ctx) error {
 		return c.Status(403).SendString("Forbidden")
 	}
 
-	companyName := c.FormValue("work_company_name")
-	if c.FormValue("guarantor_type") == "juristic" {
-		companyName = c.FormValue("juristic_company_name")
-	}
-
-	if guarantorID != "" {
-		query := `UPDATE loan_applications_guarantors SET
-            updated_at = NOW(),
-            guarantor_type = ?,
-            trade_registration_id = ?, registration_date = NULLIF(?, ''), tax_id = ?,
-            title = ?, first_name = ?, last_name = ?, gender = ?, id_card = ?,
-            id_card_issue_date = NULLIF(?, ''), id_card_expiry_date = NULLIF(?, ''), date_of_birth = NULLIF(?, ''),
-            ethnicity = ?, nationality = ?, religion = ?, marital_status = ?, mobile_phone = ?,
-            house_reg_no = ?, house_reg_moo = ?, house_reg_soi = ?, house_reg_road = ?, house_reg_province = ?, house_reg_district = ?, house_reg_subdistrict = ?, house_reg_zipcode = ?,
-            same_as_house_reg = ?,
-            current_no = ?, current_moo = ?, current_soi = ?, current_road = ?, current_province = ?, current_district = ?, current_subdistrict = ?, current_zipcode = ?,
-            company_name = ?, occupation = ?, position = ?, salary = ?, other_income = ?, income_source = ?,
-            work_phone = ?, work_no = ?, work_moo = ?, work_soi = ?, work_road = ?, work_province = ?, work_district = ?, work_subdistrict = ?, work_zipcode = ?,
-            other_card_type = ?, other_card_number = ?, other_card_issue_date = NULLIF(?, ''), other_card_expiry_date = NULLIF(?, ''),
-            doc_delivery_type = ?, doc_no = ?, doc_moo = ?, doc_soi = ?, doc_road = ?, doc_province = ?, doc_district = ?, doc_subdistrict = ?, doc_zipcode = ?
-            WHERE id = ? AND loan_id = ?`
-
-		err := config.DB.Exec(query,
-			c.FormValue("guarantor_type"),
-			c.FormValue("trade_registration_id"), c.FormValue("registration_date"), c.FormValue("tax_id"),
-			c.FormValue("title"), c.FormValue("first_name"), c.FormValue("last_name"), c.FormValue("gender"), c.FormValue("id_card"),
-			c.FormValue("id_card_issue_date"), c.FormValue("id_card_expiry_date"), c.FormValue("date_of_birth"),
-			c.FormValue("ethnicity"), c.FormValue("nationality"), c.FormValue("religion"), c.FormValue("marital_status"), c.FormValue("mobile_phone"),
-			c.FormValue("house_reg_no"), c.FormValue("house_reg_moo"), c.FormValue("house_reg_soi"), c.FormValue("house_reg_road"), c.FormValue("house_reg_province"), c.FormValue("house_reg_district"), c.FormValue("house_reg_subdistrict"), c.FormValue("house_reg_zipcode"),
-			c.FormValue("same_as_house_reg") == "on",
-			c.FormValue("current_no"), c.FormValue("current_moo"), c.FormValue("current_soi"), c.FormValue("current_road"), c.FormValue("current_province"), c.FormValue("current_district"), c.FormValue("current_subdistrict"), c.FormValue("current_zipcode"),
-			companyName, c.FormValue("occupation"), c.FormValue("position"), parseMoney(c.FormValue("salary")), parseMoney(c.FormValue("other_income")), c.FormValue("income_source"),
-			c.FormValue("work_phone"), c.FormValue("work_no"), c.FormValue("work_moo"), c.FormValue("work_soi"), c.FormValue("work_road"), c.FormValue("work_province"), c.FormValue("work_district"), c.FormValue("work_subdistrict"), c.FormValue("work_zipcode"),
-			c.FormValue("other_card_type"), c.FormValue("other_card_number"), c.FormValue("other_card_issue_date"), c.FormValue("other_card_expiry_date"),
-			c.FormValue("doc_delivery_type"), c.FormValue("doc_no"), c.FormValue("doc_moo"), c.FormValue("doc_soi"), c.FormValue("doc_road"), c.FormValue("doc_province"), c.FormValue("doc_district"), c.FormValue("doc_subdistrict"), c.FormValue("doc_zipcode"),
-			guarantorID, loan.ID,
-		).Error
-		if err != nil {
-			log.Printf("[guarantor] error updating ID %s: %v", guarantorID, err)
-			return c.Status(500).SendString("Error updating guarantor (V2): " + err.Error())
-		}
-		return c.Redirect("/step4?id=" + loanIDStr)
-	}
-
-	query := `INSERT INTO loan_applications_guarantors (
-        created_at, updated_at, loan_id,
-        guarantor_type, trade_registration_id, registration_date, tax_id,
-        title, first_name, last_name, gender, id_card,
-        id_card_issue_date, id_card_expiry_date, date_of_birth,
-        ethnicity, nationality, religion, marital_status, mobile_phone,
-        house_reg_no, house_reg_moo, house_reg_soi, house_reg_road, house_reg_province, house_reg_district, house_reg_subdistrict, house_reg_zipcode,
-        same_as_house_reg,
-        current_no, current_moo, current_soi, current_road, current_province, current_district, current_subdistrict, current_zipcode,
-        company_name, occupation, position, salary, other_income, income_source,
-        work_phone, work_no, work_moo, work_soi, work_road, work_province, work_district, work_subdistrict, work_zipcode,
-        other_card_type, other_card_number, other_card_issue_date, other_card_expiry_date,
-        doc_delivery_type, doc_no, doc_moo, doc_soi, doc_road, doc_province, doc_district, doc_subdistrict, doc_zipcode
-    ) VALUES (
-        NOW(), NOW(), ?,
-        ?, ?, NULLIF(?, ''), ?,
-        ?, ?, ?, ?, ?,
-        NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?,
-        ?,
-        ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, NULLIF(?, ''), NULLIF(?, ''),
-        ?, ?, ?, ?, ?, ?, ?, ?, ?
-    )`
-
-	err = config.DB.Exec(query,
-		loanIDStr,
-		c.FormValue("guarantor_type"),
-		c.FormValue("trade_registration_id"), c.FormValue("registration_date"), c.FormValue("tax_id"),
-		c.FormValue("title"), c.FormValue("first_name"), c.FormValue("last_name"), c.FormValue("gender"), c.FormValue("id_card"),
-		c.FormValue("id_card_issue_date"), c.FormValue("id_card_expiry_date"), c.FormValue("date_of_birth"),
-		c.FormValue("ethnicity"), c.FormValue("nationality"), c.FormValue("religion"), c.FormValue("marital_status"), c.FormValue("mobile_phone"),
-		c.FormValue("house_reg_no"), c.FormValue("house_reg_moo"), c.FormValue("house_reg_soi"), c.FormValue("house_reg_road"), c.FormValue("house_reg_province"), c.FormValue("house_reg_district"), c.FormValue("house_reg_subdistrict"), c.FormValue("house_reg_zipcode"),
-		c.FormValue("same_as_house_reg") == "on",
-		c.FormValue("current_no"), c.FormValue("current_moo"), c.FormValue("current_soi"), c.FormValue("current_road"), c.FormValue("current_province"), c.FormValue("current_district"), c.FormValue("current_subdistrict"), c.FormValue("current_zipcode"),
-		companyName, c.FormValue("occupation"), c.FormValue("position"), parseMoney(c.FormValue("salary")), parseMoney(c.FormValue("other_income")), c.FormValue("income_source"),
-		c.FormValue("work_phone"), c.FormValue("work_no"), c.FormValue("work_moo"), c.FormValue("work_soi"), c.FormValue("work_road"), c.FormValue("work_province"), c.FormValue("work_district"), c.FormValue("work_subdistrict"), c.FormValue("work_zipcode"),
-		c.FormValue("other_card_type"), c.FormValue("other_card_number"), c.FormValue("other_card_issue_date"), c.FormValue("other_card_expiry_date"),
-		c.FormValue("doc_delivery_type"), c.FormValue("doc_no"), c.FormValue("doc_moo"), c.FormValue("doc_soi"), c.FormValue("doc_road"), c.FormValue("doc_province"), c.FormValue("doc_district"), c.FormValue("doc_subdistrict"), c.FormValue("doc_zipcode"),
-	).Error
+	err = services.SaveGuarantor(config.DB, loan.ID, guarantorID, guarantorInputFromRequest(c))
 	if err != nil {
-		log.Printf("[guarantor] error inserting: %v", err)
+		log.Printf("[guarantor] error saving ID %s: %v", guarantorID, err)
 		return c.Status(500).SendString("Error saving guarantor (V2): " + err.Error())
-	}
-
-	updateLoanSQL := "UPDATE loan_applications SET no_guarantor = false, last_update_date = NOW() WHERE id = ?"
-	if err := config.DB.Exec(updateLoanSQL, loan.ID).Error; err != nil {
-		log.Printf("[guarantor] error updating no_guarantor for loan %s: %v", loanIDStr, err)
 	}
 
 	return c.Redirect("/step4?id=" + loanIDStr)
@@ -232,7 +211,7 @@ func DeleteGuarantor(c *fiber.Ctx) error {
 		return c.Status(403).SendString("Forbidden")
 	}
 
-	if err := config.DB.Exec("DELETE FROM loan_applications_guarantors WHERE id = ? AND loan_id = ?", id, loan.ID).Error; err != nil {
+	if err := services.DeleteGuarantor(config.DB, loan.ID, id); err != nil {
 		log.Printf("[guarantor] error deleting ID %s: %v", id, err)
 		return c.Status(500).SendString("Error deleting guarantor")
 	}
