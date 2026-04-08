@@ -46,6 +46,7 @@ func ValidateConfig(cfg *config.AppConfig) error {
 	requirePositive(&issues, cfg.InsuranceRateLimitWindowSeconds, "INSURANCE_RATE_LIMIT_WINDOW_SECONDS")
 	requirePositive(&issues, cfg.UploadRateLimitMax, "UPLOAD_RATE_LIMIT_MAX")
 	requirePositive(&issues, cfg.UploadRateLimitWindowSeconds, "UPLOAD_RATE_LIMIT_WINDOW_SECONDS")
+	requirePositiveInt64(&issues, cfg.UploadMaxFileSizeBytes, "UPLOAD_MAX_FILE_SIZE_BYTES")
 
 	validateR2Config(&issues, cfg)
 
@@ -150,6 +151,12 @@ func requireString(issues *[]string, value, key string) {
 }
 
 func requirePositive(issues *[]string, value int, key string) {
+	if value <= 0 {
+		*issues = append(*issues, key+" must be greater than zero")
+	}
+}
+
+func requirePositiveInt64(issues *[]string, value int64, key string) {
 	if value <= 0 {
 		*issues = append(*issues, key+" must be greater than zero")
 	}

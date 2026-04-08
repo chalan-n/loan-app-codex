@@ -41,6 +41,7 @@ type AppConfig struct {
 	InsuranceRateLimitWindowSeconds int
 	UploadRateLimitMax              int
 	UploadRateLimitWindowSeconds    int
+	UploadMaxFileSizeBytes          int64
 
 	// Mobile API
 	MobileAPIKey string
@@ -101,6 +102,7 @@ func GetConfig() *AppConfig {
 		InsuranceRateLimitWindowSeconds: getEnvInt("INSURANCE_RATE_LIMIT_WINDOW_SECONDS", 60),
 		UploadRateLimitMax:              getEnvInt("UPLOAD_RATE_LIMIT_MAX", 20),
 		UploadRateLimitWindowSeconds:    getEnvInt("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", 300),
+		UploadMaxFileSizeBytes:          getEnvInt64("UPLOAD_MAX_FILE_SIZE_BYTES", 10*1024*1024),
 
 		MobileAPIKey: getEnv("MOBILE_API_KEY", ""),
 
@@ -185,6 +187,15 @@ func getEnv(key, fallback string) string {
 func getEnvInt(key string, fallback int) int {
 	if val := os.Getenv(key); val != "" {
 		if parsed, err := strconv.Atoi(val); err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	if val := os.Getenv(key); val != "" {
+		if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
 			return parsed
 		}
 	}

@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"loan-app/config"
 	"loan-app/models"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -326,8 +330,14 @@ func GetInsuClasses(c *fiber.Ctx) error {
 }
 
 var (
-	r2Once         sync.Once
-	r2Client       *s3.S3
+	r2Once                      sync.Once
+	r2Client                    *s3.S3
+	allowedInsuranceUploadTypes = map[string]string{
+		".pdf":  "application/pdf",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+	}
 	presignFileURL = func(filename string) (string, error) {
 		svc := getR2Client()
 		req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
@@ -336,6 +346,16 @@ var (
 		})
 
 		return req.Presign(15 * time.Minute)
+	}
+	putR2Object = func(filename string, body io.ReadSeeker, contentType string) error {
+		svc := getR2Client()
+		_, err := svc.PutObject(&s3.PutObjectInput{
+			Bucket:      aws.String(config.GetConfig().R2BucketName),
+			Key:         aws.String(filename),
+			Body:        body,
+			ContentType: aws.String(contentType),
+		})
+		return err
 	}
 )
 
@@ -352,6 +372,55 @@ func getR2Client() *s3.S3 {
 		r2Client = s3.New(sess)
 	})
 	return r2Client
+}
+
+func validateInsuranceUpload(fileHeader *multipart.FileHeader, maxBytes int64) (multipartFile io.ReadSeeker, contentType string, err error) {
+	if fileHeader == nil {
+		return nil, "", errors.New("file is required")
+	}
+	if fileHeader.Size <= 0 {
+		return nil, "", errors.New("file is empty")
+	}
+	if fileHeader.Size > maxBytes {
+		return nil, "", fmt.Errorf("file exceeds maximum size of %d bytes", maxBytes)
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	expectedType, ok := allowedInsuranceUploadTypes[ext]
+	if !ok {
+		return nil, "", fmt.Errorf("unsupported file extension: %s", ext)
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		return nil, "", errors.New("failed to open file")
+	}
+
+	sniffer, ok := src.(io.ReadSeeker)
+	if !ok {
+		_ = src.Close()
+		return nil, "", errors.New("uploaded file does not support seeking")
+	}
+
+	header := make([]byte, 512)
+	n, readErr := sniffer.Read(header)
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		_ = src.Close()
+		return nil, "", errors.New("failed to inspect file content")
+	}
+
+	detectedType := http.DetectContentType(header[:n])
+	if detectedType != expectedType {
+		_ = src.Close()
+		return nil, "", fmt.Errorf("detected content type %s does not match %s", detectedType, expectedType)
+	}
+
+	if _, err := sniffer.Seek(0, io.SeekStart); err != nil {
+		_ = src.Close()
+		return nil, "", errors.New("failed to rewind uploaded file")
+	}
+
+	return sniffer, detectedType, nil
 }
 
 // Upload Insurance File to Cloudflare R2
@@ -377,26 +446,19 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "File upload failed"})
 	}
 
-	// Open file content
-	src, err := fileHeader.Open()
+	src, contentType, err := validateInsuranceUpload(fileHeader, config.GetConfig().UploadMaxFileSizeBytes)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open file"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	defer src.Close()
+	if closer, ok := src.(io.Closer); ok {
+		defer closer.Close()
+	}
 
 	// Generate safe key (filename)
 	filename := fmt.Sprintf("%s_%d_%s", loanID, time.Now().UnixNano(), fileHeader.Filename)
 
 	// Upload to R2
-	svc := getR2Client()
-	_, err = svc.PutObject(&s3.PutObjectInput{
-		Bucket:      aws.String(config.GetConfig().R2BucketName),
-		Key:         aws.String(filename),
-		Body:        src,
-		ContentType: aws.String(fileHeader.Header.Get("Content-Type")),
-	})
-
-	if err != nil {
+	if err := putR2Object(filename, src, contentType); err != nil {
 		log.Printf("R2 Upload Error: %v", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to upload to Cloud Storage"})
 	}

@@ -25,6 +25,7 @@ func TestValidateConfigAcceptsHealthyProductionConfig(t *testing.T) {
 		InsuranceRateLimitWindowSeconds: 60,
 		UploadRateLimitMax:              20,
 		UploadRateLimitWindowSeconds:    300,
+		UploadMaxFileSizeBytes:          10 * 1024 * 1024,
 		MobileAPIKey:                    "mobile-key",
 		R2AccountId:                     "account",
 		R2AccessKeyId:                   "access",
@@ -59,6 +60,7 @@ func TestValidateConfigRejectsProductionDefaults(t *testing.T) {
 		InsuranceRateLimitWindowSeconds: 60,
 		UploadRateLimitMax:              20,
 		UploadRateLimitWindowSeconds:    300,
+		UploadMaxFileSizeBytes:          10 * 1024 * 1024,
 		WebAuthnRPID:                    "loan.example.com",
 		WebAuthnOrigin:                  "http://loan.example.com",
 	}
@@ -100,6 +102,7 @@ func TestValidateConfigRejectsIncompleteR2AndInvalidLimits(t *testing.T) {
 		InsuranceRateLimitWindowSeconds: 60,
 		UploadRateLimitMax:              20,
 		UploadRateLimitWindowSeconds:    300,
+		UploadMaxFileSizeBytes:          0,
 		R2AccountId:                     "account",
 		R2AccessKeyId:                   "access",
 		WebAuthnRPID:                    "localhost",
@@ -115,6 +118,7 @@ func TestValidateConfigRejectsIncompleteR2AndInvalidLimits(t *testing.T) {
 	for _, expected := range []string{
 		"SESSION_IDLE_TIMEOUT_MINUTES must be greater than zero",
 		"LOGIN_RATE_LIMIT_MAX must be greater than zero",
+		"UPLOAD_MAX_FILE_SIZE_BYTES must be greater than zero",
 		"R2 configuration is incomplete",
 	} {
 		if !strings.Contains(got, expected) {
