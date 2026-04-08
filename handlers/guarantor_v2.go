@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"loan-app/config"
+	"loan-app/repositories"
 	"loan-app/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -96,6 +97,10 @@ func guarantorInputFromRequest(c *fiber.Ctx) services.GuarantorInput {
 	}
 }
 
+func guarantorService() *services.GuarantorService {
+	return services.NewGuarantorService(repositories.NewGormGuarantorRepository(config.DB))
+}
+
 func AddGuarantorGetV2(c *fiber.Ctx) error {
 	loanID := c.Query("loan_id")
 	guarantorID := c.Query("guarantor_id")
@@ -111,7 +116,7 @@ func AddGuarantorGetV2(c *fiber.Ctx) error {
 
 	guarantorData := make(map[string]interface{})
 	if guarantorID != "" {
-		if guarantor, err := services.FindGuarantorByLoan(config.DB, loan.ID, guarantorID); err == nil {
+		if guarantor, err := guarantorService().FindByLoan(loan.ID, guarantorID); err == nil {
 			guarantorData["ID"] = guarantor.ID
 			guarantorData["Title"] = guarantor.Title
 			guarantorData["FirstName"] = guarantor.FirstName
@@ -190,7 +195,7 @@ func AddGuarantorPostV2(c *fiber.Ctx) error {
 		return c.Status(403).SendString("Forbidden")
 	}
 
-	err = services.SaveGuarantor(config.DB, loan.ID, guarantorID, guarantorInputFromRequest(c))
+	err = guarantorService().Save(loan.ID, guarantorID, guarantorInputFromRequest(c))
 	if err != nil {
 		log.Printf("[guarantor] error saving ID %s: %v", guarantorID, err)
 		return c.Status(500).SendString("Error saving guarantor (V2): " + err.Error())
@@ -211,7 +216,7 @@ func DeleteGuarantor(c *fiber.Ctx) error {
 		return c.Status(403).SendString("Forbidden")
 	}
 
-	if err := services.DeleteGuarantor(config.DB, loan.ID, id); err != nil {
+	if err := guarantorService().Delete(loan.ID, id); err != nil {
 		log.Printf("[guarantor] error deleting ID %s: %v", id, err)
 		return c.Status(500).SendString("Error deleting guarantor")
 	}

@@ -1,11 +1,8 @@
 package services
 
 import (
-	"time"
-
 	"loan-app/models"
-
-	"gorm.io/gorm"
+	"loan-app/repositories"
 )
 
 type GuarantorInput struct {
@@ -71,6 +68,14 @@ type GuarantorInput struct {
 	DocDistrict         string
 	DocSubdistrict      string
 	DocZipcode          string
+}
+
+type GuarantorService struct {
+	repo repositories.GuarantorRepository
+}
+
+func NewGuarantorService(repo repositories.GuarantorRepository) *GuarantorService {
+	return &GuarantorService{repo: repo}
 }
 
 func stringPtrOrNil(value string) *string {
@@ -146,46 +151,31 @@ func ApplyGuarantorInput(guarantor *models.Guarantor, input GuarantorInput) {
 	guarantor.DocZipcode = input.DocZipcode
 }
 
-func FindGuarantorByLoan(db *gorm.DB, loanID int, guarantorID string) (*models.Guarantor, error) {
-	var guarantor models.Guarantor
-	if err := db.Where("id = ? AND loan_id = ?", guarantorID, loanID).First(&guarantor).Error; err != nil {
-		return nil, err
-	}
-	return &guarantor, nil
+func (s *GuarantorService) FindByLoan(loanID int, guarantorID string) (*models.Guarantor, error) {
+	return s.repo.FindByLoan(loanID, guarantorID)
 }
 
-func SaveGuarantor(db *gorm.DB, loanID int, guarantorID string, input GuarantorInput) error {
+func (s *GuarantorService) Save(loanID int, guarantorID string, input GuarantorInput) error {
 	if guarantorID != "" {
-		guarantor, err := FindGuarantorByLoan(db, loanID, guarantorID)
+		guarantor, err := s.repo.FindByLoan(loanID, guarantorID)
 		if err != nil {
 			return err
 		}
 		ApplyGuarantorInput(guarantor, input)
-		return db.Save(guarantor).Error
+		return s.repo.Save(guarantor)
 	}
 
 	guarantor := models.Guarantor{
 		LoanID: int32(loanID),
 	}
 	ApplyGuarantorInput(&guarantor, input)
-	if err := db.Create(&guarantor).Error; err != nil {
+	if err := s.repo.Create(&guarantor); err != nil {
 		return err
 	}
 
-	return db.Model(&models.LoanApplication{}).
-		Where("id = ?", loanID).
-		Updates(map[string]interface{}{
-			"no_guarantor":     false,
-			"last_update_date": gorm.Expr("NOW()"),
-		}).Error
+	return s.repo.MarkLoanHasGuarantor(loanID)
 }
 
-func DeleteGuarantor(db *gorm.DB, loanID int, guarantorID string) error {
-	return db.Where("id = ? AND loan_id = ?", guarantorID, loanID).Delete(&models.Guarantor{}).Error
-}
-
-func TouchLoanGuarantorUpdate(db *gorm.DB, loanID int) error {
-	return db.Model(&models.LoanApplication{}).
-		Where("id = ?", loanID).
-		Update("last_update_date", time.Now().Format("2006-01-02 15:04:05")).Error
+func (s *GuarantorService) Delete(loanID int, guarantorID string) error {
+	return s.repo.DeleteByLoan(loanID, guarantorID)
 }
