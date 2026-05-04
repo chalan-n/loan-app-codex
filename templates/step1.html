@@ -2675,6 +2675,22 @@
        OCR บัตรประชาชน — Auto-fill ผู้เช่าซื้อ Step 1
        =================================================== -->
   <script>
+    function withOCRTimeout(promise, timeoutMs, fallbackValue) {
+      return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(fallbackValue), timeoutMs))
+      ]);
+    }
+
+    function buildOCRFilename(originalName, blob, fallbackBase) {
+      const clean = (originalName || fallbackBase || 'ocr-upload').replace(/[^\w.\-]+/g, '_');
+      const dot = clean.lastIndexOf('.');
+      const base = dot > 0 ? clean.slice(0, dot) : clean;
+      if (blob && blob.type === 'image/png') return base + '.png';
+      if (blob && blob.type === 'image/webp') return base + '.webp';
+      return base + '.jpg';
+    }
+
     /**
      * handleIdCardFile — ถ่ายรูป/เลือกไฟล์บัตรประชาชน แล้วส่ง Gemini OCR
      */
@@ -2686,10 +2702,10 @@
       // ── Quality analysis + compression (parallel, non-blocking) ────────
       const iqEl = document.getElementById('iq-result-idcard');
       const [qResult, compressed] = await Promise.all([
-        ImageQuality.analyze(file),
-        ImageQuality.compress(file)
+        withOCRTimeout(ImageQuality.analyze(file), 5000, null),
+        withOCRTimeout(ImageQuality.compress(file), 8000, file)
       ]);
-      ImageQuality.showFeedback(iqEl, qResult);
+      if (qResult) ImageQuality.showFeedback(iqEl, qResult);
 
       const overlay = document.getElementById('idcardOverlay');
       const overlayMsg = document.getElementById('idcardOverlayMsg');
@@ -2703,7 +2719,7 @@
 
       try {
         const formData = new FormData();
-        formData.append('image', compressed, file.name || 'idcard.jpg');
+        formData.append('image', compressed, buildOCRFilename(file.name, compressed, 'idcard'));
 
         const res = await fetch('/api/v1/ocr/idcard', { method: 'POST', body: formData });
         const json = await res.json();
@@ -3204,10 +3220,10 @@
       // ── 5. Quality check + compress ──────────────────────────────────
       const iqEl = document.getElementById('iq-result-idcard');
       const [qResult, blob] = await Promise.all([
-        ImageQuality.analyze(rawBlob),
-        ImageQuality.compress(rawBlob)
+        withOCRTimeout(ImageQuality.analyze(rawBlob), 5000, null),
+        withOCRTimeout(ImageQuality.compress(rawBlob), 8000, rawBlob)
       ]);
-      ImageQuality.showFeedback(iqEl, qResult);
+      if (qResult) ImageQuality.showFeedback(iqEl, qResult);
 
       // ── 6. ส่ง OCR (reuse logic จาก handleIdCardFile) ──────────────
       const overlay = document.getElementById('idcardOverlay');
@@ -3221,7 +3237,7 @@
 
       try {
         const formData = new FormData();
-        formData.append('image', blob, 'idcard_capture.jpg');
+        formData.append('image', blob, buildOCRFilename('idcard_capture.jpg', blob, 'idcard_capture'));
 
         const res = await fetch('/api/v1/ocr/idcard', { method: 'POST', body: formData });
         const json = await res.json();

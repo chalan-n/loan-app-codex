@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e3a8a">
+  <title>Loan Timeline | CMO APP</title>
+  <link rel="stylesheet" href="/static/css/kanit.css">
+  <link rel="stylesheet" href="/static/css/all.min.css">
+  <style>
+    :root {
+      --navy:#1e3a8a; --sky:#dbeafe; --green:#059669; --red:#dc2626;
+      --orange:#d97706; --purple:#7c3aed; --gray:#6b7280; --light:#f8fafc; --border:#e2e8f0;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Kanit', sans-serif; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); min-height:100vh; color:#1e293b; }
+    .top-header { background:linear-gradient(135deg,var(--navy),#1e40af); color:white; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .top-header h1 { font-size:1.3rem; display:flex; align-items:center; gap:10px; }
+    .nav-links { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .nav-links a { color:rgba(255,255,255,0.85); text-decoration:none; font-size:0.95rem; padding:6px 14px; border-radius:20px; transition:background 0.2s; }
+    .nav-links a:hover { background:rgba(255,255,255,0.2); color:white; }
+    .container { max-width:980px; margin:0 auto; padding:24px 16px; }
+    .summary { background:white; border:1px solid var(--border); border-radius:18px; padding:20px; box-shadow:0 4px 15px rgba(30,58,138,0.08); margin-bottom:20px; }
+    .summary h2 { color:var(--navy); font-size:1.35rem; margin-bottom:10px; }
+    .meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; color:var(--gray); font-size:0.9rem; }
+    .meta strong { color:#1e293b; display:block; font-size:1rem; margin-top:2px; }
+    .timeline { position:relative; background:white; border:1px solid var(--border); border-radius:18px; padding:18px; box-shadow:0 4px 15px rgba(30,58,138,0.08); }
+    .timeline h3 { color:var(--navy); font-size:1.05rem; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .event { display:grid; grid-template-columns:28px 1fr auto; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+    .event:last-child { border-bottom:0; }
+    .dot { width:12px; height:12px; border-radius:50%; background:var(--gray); margin-top:5px; box-shadow:0 0 0 5px #f1f5f9; }
+    .dot.create_loan, .dot.upload_insurance_file { background:var(--navy); }
+    .dot.submit_loan { background:var(--purple); }
+    .dot.delete_loan, .dot.delete_insurance_file { background:var(--red); }
+    .dot.deny_loan_access, .dot.deny_file_access { background:var(--orange); }
+    .event-main { min-width:0; }
+    .action { font-weight:700; color:#1e293b; word-break:break-word; }
+    .detail { color:var(--gray); font-size:0.88rem; margin-top:3px; word-break:break-word; }
+    .actor { color:var(--navy); font-size:0.85rem; margin-top:4px; }
+    .time { color:var(--gray); font-size:0.82rem; white-space:nowrap; text-align:right; }
+    .empty { text-align:center; color:var(--gray); padding:34px 10px; }
+    @media (max-width:768px) {
+      .top-header { flex-direction:column; align-items:flex-start; }
+      .event { grid-template-columns:24px 1fr; }
+      .time { grid-column:2; text-align:left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-header">
+    <h1><i class="fas fa-stream"></i> Loan Activity Timeline</h1>
+    <div class="nav-links">
+      <a href="/main"><i class="fas fa-list"></i> รายการ</a>
+      <a href="/step6?id={{.Loan.ID}}"><i class="fas fa-shield-alt"></i> Step6</a>
+      <a href="/dashboard"><i class="fas fa-chart-line"></i> Dashboard</a>
+      <a href="/admin/health"><i class="fas fa-heartbeat"></i> Health</a>
+      <a href="/logout"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="summary">
+      <h2>{{.Loan.RefCode}}</h2>
+      <div class="meta">
+        <div>ลูกค้า<strong>{{.Loan.FirstName}} {{.Loan.LastName}}</strong></div>
+        <div>สถานะ<strong>{{.Loan.Status}}</strong></div>
+        <div>ผู้ดูแล<strong>{{.Loan.StaffID}}</strong></div>
+        <div>อัปเดตล่าสุด<strong>{{.Loan.LastUpdateDate}}</strong></div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <h3><i class="fas fa-history"></i> ประวัติกิจกรรมของใบคำขอนี้</h3>
+      {{range .Logs}}
+      <div class="event">
+        <div class="dot {{.Action}}"></div>
+        <div class="event-main">
+          <div class="action">{{.Action}}</div>
+          {{if .Detail}}<div class="detail">{{.Detail}}</div>{{end}}
+          <div class="actor">{{.Username}} {{if .Role}}({{.Role}}){{end}}</div>
+        </div>
+        <div class="time">{{.CreatedAt.Format "02/01/2006 15:04:05"}}</div>
+      </div>
+      {{else}}
+      <div class="empty">ยังไม่พบ audit activity สำหรับ RefCode นี้</div>
+      {{end}}
+    </div>
+  </div>
+</body>
+</html>

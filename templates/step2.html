@@ -1512,6 +1512,22 @@
   </div>
 
   <script>
+    function withOCRTimeout(promise, timeoutMs, fallbackValue) {
+      return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(fallbackValue), timeoutMs))
+      ]);
+    }
+
+    function buildOCRFilename(originalName, blob, fallbackBase) {
+      const clean = (originalName || fallbackBase || 'ocr-upload').replace(/[^\w.\-]+/g, '_');
+      const dot = clean.lastIndexOf('.');
+      const base = dot > 0 ? clean.slice(0, dot) : clean;
+      if (blob && blob.type === 'image/png') return base + '.png';
+      if (blob && blob.type === 'image/webp') return base + '.webp';
+      return base + '.jpg';
+    }
+
     /**
      * fillVehicleFields — นำ VehicleInfo JSON ไปใส่ใน input fields ต่างๆ
      * @param {Object} d - data จาก /api/v1/ocr/vehicle response
@@ -2020,10 +2036,10 @@
       const rawBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
       const iqEl = document.getElementById('iq-result-vehicle');
       const [qResult, compressed] = await Promise.all([
-        ImageQuality.analyze(rawBlob),
-        ImageQuality.compress(rawBlob)
+        withOCRTimeout(ImageQuality.analyze(rawBlob), 5000, null),
+        withOCRTimeout(ImageQuality.compress(rawBlob), 8000, rawBlob)
       ]);
-      ImageQuality.showFeedback(iqEl, qResult);
+      if (qResult) ImageQuality.showFeedback(iqEl, qResult);
       await sendVehicleOcr(compressed);
     }
 
@@ -2033,10 +2049,10 @@
       const file = input.files[0];
       const iqEl = document.getElementById('iq-result-vehicle');
       const [qResult, compressed] = await Promise.all([
-        ImageQuality.analyze(file),
-        ImageQuality.compress(file)
+        withOCRTimeout(ImageQuality.analyze(file), 5000, null),
+        withOCRTimeout(ImageQuality.compress(file), 8000, file)
       ]);
-      ImageQuality.showFeedback(iqEl, qResult);
+      if (qResult) ImageQuality.showFeedback(iqEl, qResult);
       await sendVehicleOcr(compressed);
       input.value = '';
     }
@@ -2054,7 +2070,7 @@
 
       try {
         const fd = new FormData();
-        fd.append('image', blob, blob.name || 'vehicle_capture.jpg');
+        fd.append('image', blob, buildOCRFilename(blob.name || 'vehicle_capture.jpg', blob, 'vehicle_capture'));
         const res = await fetch('/api/v1/ocr/vehicle', { method: 'POST', body: fd });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.message || json.error || 'API error');

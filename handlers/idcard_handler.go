@@ -104,7 +104,7 @@ func OcrIDCard(c *fiber.Ctx) error {
 	// ── 7. เรียก Gemini ───────────────────────────────────────────────
 	logOCRRequest(moUsername, branch, filename, fileSize, "IDCARD SENDING → Gemini")
 
-	idInfo, err := services.AnalyzeIDCard(c.Context(), preResult.Data, preResult.MIMEType)
+	idInfo, err := services.AnalyzeIDCardFast(c.Context(), preResult.Data, preResult.MIMEType)
 	if err != nil {
 		logOCRRequest(moUsername, branch, filename, fileSize, "IDCARD FAILED: "+err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e3a8a">
+  <title>System Status | CMO APP</title>
+  <link rel="stylesheet" href="/static/css/kanit.css">
+  <link rel="stylesheet" href="/static/css/all.min.css">
+  <style>
+    :root {
+      --navy:#1e3a8a; --sky:#dbeafe; --green:#059669; --red:#dc2626;
+      --orange:#d97706; --gray:#6b7280; --light:#f8fafc; --border:#e2e8f0;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Kanit', sans-serif; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); min-height:100vh; color:#1e293b; }
+    .top-header { background:linear-gradient(135deg,var(--navy),#1e40af); color:white; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .top-header h1 { font-size:1.3rem; font-weight:700; display:flex; align-items:center; gap:10px; }
+    .nav-links { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .nav-links a { color:rgba(255,255,255,0.85); text-decoration:none; font-size:0.95rem; padding:6px 14px; border-radius:20px; transition:background 0.2s; }
+    .nav-links a:hover, .nav-links a.active { background:rgba(255,255,255,0.2); color:white; }
+    .container { max-width:1100px; margin:0 auto; padding:24px 16px; }
+    .hero { background:white; border:1px solid var(--border); border-radius:18px; padding:22px; box-shadow:0 4px 15px rgba(30,58,138,0.08); margin-bottom:20px; display:flex; justify-content:space-between; gap:16px; align-items:center; }
+    .hero h2 { color:var(--navy); font-size:1.4rem; margin-bottom:4px; }
+    .hero p { color:var(--gray); font-size:0.92rem; }
+    .overall { padding:10px 18px; border-radius:999px; font-weight:700; text-transform:uppercase; }
+    .overall.ok { background:#d1fae5; color:#065f46; }
+    .overall.warn { background:#fef3c7; color:#92400e; }
+    .overall.fail { background:#fee2e2; color:#991b1b; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:20px; }
+    .card { background:white; border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:0 4px 15px rgba(30,58,138,0.08); }
+    .card h3 { color:var(--navy); font-size:1rem; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+    .status { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:0.82rem; font-weight:700; margin-bottom:10px; }
+    .status.ok { background:#d1fae5; color:#065f46; }
+    .status.warn { background:#fef3c7; color:#92400e; }
+    .status.fail { background:#fee2e2; color:#991b1b; }
+    .message { color:var(--gray); font-size:0.88rem; word-break:break-word; }
+    .metric-list { background:white; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 4px 15px rgba(30,58,138,0.08); }
+    .metric-row { display:grid; grid-template-columns:260px 1fr; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
+    .metric-row:last-child { border-bottom:0; }
+    .metric-label { color:var(--gray); font-weight:600; }
+    .metric-value { color:#1e293b; word-break:break-word; }
+    @media (max-width:768px) {
+      .top-header, .hero { flex-direction:column; align-items:flex-start; }
+      .metric-row { grid-template-columns:1fr; gap:4px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-header">
+    <h1><i class="fas fa-heartbeat"></i> System Status</h1>
+    <div class="nav-links">
+      <a href="/main"><i class="fas fa-list"></i> รายการ</a>
+      <a href="/dashboard"><i class="fas fa-chart-line"></i> Dashboard</a>
+      <a href="/admin/users"><i class="fas fa-users-cog"></i> Users</a>
+      <a href="/admin/audit"><i class="fas fa-history"></i> Audit Log</a>
+      <a href="/admin/health" class="active"><i class="fas fa-heartbeat"></i> Health</a>
+      <a href="/logout"><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <div>
+        <h2>Admin Health / System Status</h2>
+        <p>ตรวจสถานะระบบแบบไม่แสดง secret สร้างเมื่อ {{.GeneratedAt.Format "02/01/2006 15:04:05"}}</p>
+      </div>
+      <div class="overall {{.Overall}}">{{.Overall}}</div>
+    </div>
+
+    <div class="grid">
+      {{range .Checks}}
+      <div class="card">
+        <h3><i class="fas fa-check-circle"></i> {{.Name}}</h3>
+        <div class="status {{.Status}}">{{.Status}}</div>
+        <div class="message">{{.Message}}</div>
+      </div>
+      {{end}}
+    </div>
+
+    <div class="metric-list">
+      {{range .Metrics}}
+      <div class="metric-row">
+        <div class="metric-label">{{.Label}}</div>
+        <div class="metric-value">{{.Value}}</div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</body>
+</html>

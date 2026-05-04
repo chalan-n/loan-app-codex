@@ -6,60 +6,88 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
-	"image/png"
 )
 
-// PreprocessResult คืนค่าภาพที่ผ่านการ preprocess แล้วพร้อม mimeType ที่อาจเปลี่ยนไป
 type PreprocessResult struct {
 	Data     []byte
 	MIMEType string
 }
 
-// PreprocessIDCard ปรับภาพบัตรประชาชนให้ OCR อ่านได้ดีขึ้น
-// คืนค่า PreprocessResult พร้อม mimeType ที่ถูกต้องหลัง encode
+// PreprocessIDCard keeps the old public API while using the faster OCR pipeline.
 func PreprocessIDCard(imageBytes []byte, mimeType string) (*PreprocessResult, error) {
+	return PreprocessOCRImage(imageBytes, 1600, 1.12, 88)
+}
+
+// PreprocessOCRImage resizes large mobile photos and lightly boosts contrast.
+// Returning JPEG keeps Gemini requests smaller and faster than PNG.
+func PreprocessOCRImage(imageBytes []byte, maxDimension int, contrast float64, jpegQuality int) (*PreprocessResult, error) {
 	img, _, err := image.Decode(bytes.NewReader(imageBytes))
 	if err != nil {
-		return nil, fmt.Errorf("preprocess: อ่านภาพไม่ได้: %w", err)
+		return nil, fmt.Errorf("preprocess: decode image: %w", err)
 	}
 
-	bounds := img.Bounds()
-	processed := image.NewRGBA(bounds)
+	resized := resizeImage(img, maxDimension)
+	bounds := resized.Bounds()
+	processed := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
 
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			px := img.At(x, y)
+	for y := 0; y < bounds.Dy(); y++ {
+		for x := 0; x < bounds.Dx(); x++ {
+			px := resized.At(bounds.Min.X+x, bounds.Min.Y+y)
 			r, g, b, a := px.RGBA()
-
-			// Contrast enhancement factor 1.3
-			const factor = 1.3
-			r8 := uint8(clampF(float64(r>>8)*factor, 0, 255))
-			g8 := uint8(clampF(float64(g>>8)*factor, 0, 255))
-			b8 := uint8(clampF(float64(b>>8)*factor, 0, 255))
-
-			processed.SetRGBA(x, y, color.RGBA{R: r8, G: g8, B: b8, A: uint8(a >> 8)})
+			processed.SetRGBA(x, y, color.RGBA{
+				R: uint8(adjustContrast(float64(r>>8), contrast)),
+				G: uint8(adjustContrast(float64(g>>8), contrast)),
+				B: uint8(adjustContrast(float64(b>>8), contrast)),
+				A: uint8(a >> 8),
+			})
 		}
 	}
 
-	// เลือก encode format: JPEG สำหรับ jpg, PNG สำหรับทุกอย่างอื่น
+	if jpegQuality <= 0 || jpegQuality > 100 {
+		jpegQuality = 88
+	}
 	var buf bytes.Buffer
-	outMIME := "image/png"
-	switch mimeType {
-	case "image/jpeg", "image/jpg":
-		outMIME = "image/jpeg"
-		err = jpeg.Encode(&buf, processed, &jpeg.Options{Quality: 92})
-	default:
-		// PNG, WebP, HEIC → encode เป็น PNG (Go standard library รองรับ)
-		err = png.Encode(&buf, processed)
+	if err := jpeg.Encode(&buf, processed, &jpeg.Options{Quality: jpegQuality}); err != nil {
+		return nil, fmt.Errorf("preprocess: encode jpeg: %w", err)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("preprocess: encode ไม่สำเร็จ: %w", err)
-	}
-
-	return &PreprocessResult{Data: buf.Bytes(), MIMEType: outMIME}, nil
+	return &PreprocessResult{Data: buf.Bytes(), MIMEType: "image/jpeg"}, nil
 }
 
-// clampF จำกัดค่า float64 ให้อยู่ในช่วง [lo, hi]
+func resizeImage(src image.Image, maxDimension int) image.Image {
+	if maxDimension <= 0 {
+		return src
+	}
+	bounds := src.Bounds()
+	srcW, srcH := bounds.Dx(), bounds.Dy()
+	if srcW <= maxDimension && srcH <= maxDimension {
+		return src
+	}
+
+	scale := float64(maxDimension) / float64(srcW)
+	if srcH > srcW {
+		scale = float64(maxDimension) / float64(srcH)
+	}
+	dstW := max(1, int(float64(srcW)*scale))
+	dstH := max(1, int(float64(srcH)*scale))
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+
+	for y := 0; y < dstH; y++ {
+		srcY := bounds.Min.Y + int(float64(y)*float64(srcH)/float64(dstH))
+		for x := 0; x < dstW; x++ {
+			srcX := bounds.Min.X + int(float64(x)*float64(srcW)/float64(dstW))
+			dst.Set(x, y, src.At(srcX, srcY))
+		}
+	}
+	return dst
+}
+
+func adjustContrast(v, factor float64) float64 {
+	if factor <= 0 {
+		factor = 1
+	}
+	return clampF((v-128)*factor+128, 0, 255)
+}
+
 func clampF(v, lo, hi float64) float64 {
 	if v < lo {
 		return lo

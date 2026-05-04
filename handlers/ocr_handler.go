@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"loan-app/services"
+	"loan-app/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -110,7 +111,17 @@ func OcrVehicleBook(c *fiber.Ctx) error {
 	logOCRRequest(moUsername, branch, filename, fileSize, "SENDING → Gemini")
 
 	// ── 7. เรียก Gemini OCR Service ───────────────────────────────────
-	vehicleInfo, err := services.AnalyzeVehicleBook(c.Context(), imageBytes, mimeType)
+	preResult, err := utils.PreprocessOCRImage(imageBytes, 1800, 1.08, 88)
+	if err != nil {
+		logOCRRequest(moUsername, branch, filename, fileSize, "VEHICLE PREPROCESS FAILED: "+err.Error())
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "ประมวลผลภาพไม่สำเร็จ",
+			"error":   err.Error(),
+		})
+	}
+
+	vehicleInfo, err := services.AnalyzeVehicleBookFast(c.Context(), preResult.Data, preResult.MIMEType)
 	if err != nil {
 		logOCRRequest(moUsername, branch, filename, fileSize, "FAILED: "+err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

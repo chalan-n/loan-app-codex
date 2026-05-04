@@ -627,6 +627,46 @@
       background: #cbd5e1;
     }
 
+    .upload-diagnostics {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: white;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    .upload-diagnostics.info {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1e40af;
+    }
+
+    .upload-diagnostics.success {
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    .upload-diagnostics.error {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .upload-diagnostics .diag-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .upload-diagnostics .diag-detail {
+      color: #64748b;
+      font-size: 0.82rem;
+      word-break: break-word;
+    }
+
     /* Radio Group */
     .radio-group {
       display: flex;
@@ -986,7 +1026,7 @@
                 <!-- Upload Button -->
                 <div style="text-align: center;">
                   <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" style="display:none;" onchange="handleFileUpload(this)" />
-                  <button type="button" class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                  <button type="button" class="upload-btn">
                     <i class="fas fa-cloud-upload-alt"></i> เลือกไฟล์
                   </button>
                 </div>
@@ -996,6 +1036,7 @@
                   <i class="fas fa-spinner fa-spin fa-2x"></i>
                   <div style="margin-top:5px; font-size:0.9rem;">กำลังอัปโหลด...</div>
                 </div>
+                <div id="uploadDiagnostics" class="upload-diagnostics" aria-live="polite"></div>
                 <!-- Image Quality Feedback -->
                 <div id="iq-result-insurance" style="display:none;"></div>
 
@@ -1005,6 +1046,13 @@
                 </div>
                 <!-- Hidden input to store file list for form logic if needed -->
                 <input type="hidden" id="existingFiles" value="{{ .Loan.CarInsuranceFile }}">
+                {{if eq .CurrentRole "admin"}}
+                <div style="margin-top:14px; text-align:center;">
+                  <a href="/admin/loan/{{ .Loan.ID }}/timeline" style="color:var(--navy); font-weight:600; text-decoration:none;">
+                    <i class="fas fa-stream"></i> ดู Activity Timeline ของใบคำขอนี้
+                  </a>
+                </div>
+                {{end}}
               </div>
             </div>
 
@@ -1143,7 +1191,8 @@
       // ทำให้ปุ่ม Upload ทำงาน
       document.querySelectorAll('.upload-btn').forEach(btn => {
         btn.addEventListener('click', function () {
-          this.nextElementSibling.click();
+          const input = this.closest('.upload-area')?.querySelector('input[type="file"]');
+          if (input) input.click();
         });
       });
 
@@ -1393,6 +1442,114 @@
             console.error(err);
             alert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์');
           });
+      }
+
+      function formatUploadBytes(bytes) {
+        if (!bytes) return '0 B';
+        if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+        return bytes + ' B';
+      }
+
+      function setUploadDiagnostic(type, title, detail) {
+        const box = document.getElementById('uploadDiagnostics');
+        if (!box) return;
+        box.className = 'upload-diagnostics ' + (type || 'info');
+        box.innerHTML = `<div class="diag-title">${title}</div><div class="diag-detail">${detail || ''}</div>`;
+        box.style.display = 'block';
+      }
+
+      function withTimeout(promise, timeoutMs, fallbackValue) {
+        return Promise.race([
+          promise,
+          new Promise(resolve => setTimeout(() => resolve(fallbackValue), timeoutMs))
+        ]);
+      }
+
+      function buildUploadFilename(originalName, blob) {
+        const fallback = 'insurance-upload';
+        const cleanName = (originalName || fallback).replace(/[^\w.\-]+/g, '_');
+        const dot = cleanName.lastIndexOf('.');
+        const base = dot > 0 ? cleanName.slice(0, dot) : cleanName;
+
+        if (blob.type === 'application/pdf') return base + '.pdf';
+        if (blob.type === 'image/png') return base + '.png';
+        if (blob.type === 'image/jpeg') return base + '.jpg';
+        return cleanName || fallback + '.jpg';
+      }
+
+      async function readUploadResponse(response) {
+        const text = await response.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (err) {
+          data = { error: text ? text.slice(0, 200) : 'Invalid server response' };
+        }
+        if (!response.ok) {
+          throw new Error(data.error || `Upload failed (${response.status})`);
+        }
+        return data;
+      }
+
+      async function handleFileUpload(input) {
+        if (!input.files || input.files.length === 0) return;
+
+        const file = input.files[0];
+        const fileExt = (file.name.split('.').pop() || '').toLowerCase();
+        const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+        const allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+        if (!allowedTypes.includes(file.type) && !allowedExts.includes(fileExt)) {
+          setUploadDiagnostic('error', 'ไฟล์ไม่รองรับ', `ชื่อไฟล์: ${file.name || '-'} | type: ${file.type || 'unknown'}`);
+          alert('ประเภทไฟล์ไม่รองรับ\nรองรับเฉพาะ JPG, PNG, PDF เท่านั้น');
+          input.value = '';
+          return;
+        }
+
+        const maxSizeMB = 10;
+        if (file.size > maxSizeMB * 1024 * 1024) {
+          setUploadDiagnostic('error', 'ไฟล์ใหญ่เกินกำหนด', `ขนาดไฟล์: ${formatUploadBytes(file.size)} | สูงสุด: ${maxSizeMB} MB`);
+          alert(`ไฟล์ขนาดใหญ่เกินไป\nขนาดสูงสุดที่อนุญาต: ${maxSizeMB} MB`);
+          input.value = '';
+          return;
+        }
+
+        const loading = document.getElementById('uploadLoading');
+        const iqEl = document.getElementById('iq-result-insurance');
+        setUploadDiagnostic('info', 'กำลังเตรียมไฟล์', `ชื่อไฟล์: ${file.name || '-'} | type: ${file.type || 'unknown'} | size: ${formatUploadBytes(file.size)}`);
+        if (loading) loading.style.display = 'block';
+
+        try {
+          let uploadBlob = file;
+          if (window.ImageQuality && file.type !== 'application/pdf') {
+            const qualityResult = await withTimeout(ImageQuality.analyze(file), 5000, null);
+            uploadBlob = await withTimeout(ImageQuality.compress(file), 8000, file);
+            if (qualityResult) ImageQuality.showFeedback(iqEl, qualityResult);
+          } else if (window.ImageQuality) {
+            ImageQuality.clearFeedback(iqEl);
+          }
+
+          const uploadName = buildUploadFilename(file.name, uploadBlob);
+          const formData = new FormData();
+          formData.append('file', uploadBlob, uploadName);
+          setUploadDiagnostic('info', 'กำลังอัปโหลดไฟล์', `ส่งเป็น: ${uploadName} | type: ${uploadBlob.type || file.type || 'unknown'} | size: ${formatUploadBytes(uploadBlob.size)}`);
+
+          const response = await fetch('/api/upload-insurance-file', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await readUploadResponse(response);
+
+          addFileToList(data.filename);
+          setUploadDiagnostic('success', 'อัปโหลดสำเร็จ', `ไฟล์ที่บันทึก: ${data.filename} | type: ${data.content_type || uploadBlob.type || '-'}`);
+          input.value = '';
+        } catch (err) {
+          console.error(err);
+          setUploadDiagnostic('error', 'อัปโหลดไม่สำเร็จ', err.message || 'เกิดข้อผิดพลาดระหว่างอัปโหลด');
+          alert('อัปโหลดไม่สำเร็จ: ' + (err.message || 'เกิดข้อผิดพลาดระหว่างอัปโหลดไฟล์'));
+        } finally {
+          if (loading) loading.style.display = 'none';
+        }
       }
 
       function addFileToList(filename) {

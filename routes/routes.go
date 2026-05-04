@@ -127,7 +127,9 @@ func Setup(app *fiber.App) {
 
 	// Admin panel (admin only)
 	admin := app.Group("/admin", handlers.RequireAdmin())
+	admin.Get("/health", handlers.AdminHealthPage)
 	admin.Get("/audit", handlers.AuditLogPage)
+	admin.Get("/loan/:id/timeline", handlers.LoanTimelinePage)
 	admin.Get("/users", handlers.AdminUsersPage)
 	admin.Post("/users/create", handlers.AdminCreateUser)
 	admin.Post("/users/update-role", handlers.AdminUpdateUserRole)

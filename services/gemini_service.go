@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"google.golang.org/genai"
 
@@ -16,6 +18,12 @@ import (
 
 // modelName กำหนดโมเดลที่ใช้งาน — flash เพื่อความเร็วสูงสุด
 const modelName = "gemini-2.5-flash-lite"
+
+var (
+	geminiClientMu  sync.Mutex
+	geminiClient    *genai.Client
+	geminiClientKey string
+)
 
 // ocrPrompt คือ prompt ที่บอก Gemini ให้สกัดข้อมูลจากเล่มทะเบียนรถไทยและตอบ JSON เท่านั้น
 const ocrPrompt = `จงสกัดข้อมูลจากรูปภาพเล่มทะเบียนรถไทยนี้ให้ออกมาเป็น JSON ตามโครงสร้างที่กำหนด:
@@ -262,4 +270,177 @@ func AnalyzeIDCard(ctx context.Context, imageData []byte, mimeType string) (*mod
 	}
 
 	return info.Clean(), nil
+}
+
+// AnalyzeVehicleBookFast uses a cached Gemini client plus JSON schema output.
+func AnalyzeVehicleBookFast(ctx context.Context, imageData []byte, mimeType string) (*models.VehicleInfo, error) {
+	if len(imageData) == 0 {
+		return nil, fmt.Errorf("gemini_service: imageData must not be empty")
+	}
+	if mimeType == "" {
+		mimeType = detectMIMEType(imageData)
+	}
+
+	result, err := generateOCRContent(ctx, ocrPrompt, imageData, mimeType, vehicleOCRSchema(), 512)
+	if err != nil {
+		return nil, err
+	}
+	rawText, err := extractText(result)
+	if err != nil {
+		return nil, err
+	}
+	info, err := parseVehicleJSON(rawText)
+	if err != nil {
+		return nil, err
+	}
+	return info.Clean(), nil
+}
+
+// AnalyzeIDCardFast uses a cached Gemini client plus JSON schema output.
+func AnalyzeIDCardFast(ctx context.Context, imageData []byte, mimeType string) (*models.IDCardInfo, error) {
+	if len(imageData) == 0 {
+		return nil, fmt.Errorf("gemini_service: imageData must not be empty")
+	}
+	if mimeType == "" {
+		mimeType = detectMIMEType(imageData)
+	}
+
+	result, err := generateOCRContent(ctx, idCardPrompt, imageData, mimeType, idCardOCRSchema(), 768)
+	if err != nil {
+		return nil, err
+	}
+	rawText, err := extractText(result)
+	if err != nil {
+		return nil, err
+	}
+
+	jsonStr := stripMarkdownFence(rawText)
+	var info models.IDCardInfo
+	if err := json.Unmarshal([]byte(jsonStr), &info); err != nil {
+		preview := jsonStr
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		return nil, fmt.Errorf("gemini_service: parse JSON failed: %w\nraw: %s", err, preview)
+	}
+	return info.Clean(), nil
+}
+
+func generateOCRContent(ctx context.Context, prompt string, imageData []byte, mimeType string, schema *genai.Schema, maxTokens int32) (*genai.GenerateContentResponse, error) {
+	client, err := getGeminiClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+
+	temperature := float32(0)
+	topP := float32(0.1)
+	thinkingBudget := int32(0)
+	config := &genai.GenerateContentConfig{
+		Temperature:      &temperature,
+		TopP:             &topP,
+		CandidateCount:   1,
+		MaxOutputTokens:  maxTokens,
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   schema,
+		MediaResolution:  genai.MediaResolutionHigh,
+		ThinkingConfig: &genai.ThinkingConfig{
+			ThinkingBudget: &thinkingBudget,
+		},
+	}
+
+	contents := []*genai.Content{{
+		Role: "user",
+		Parts: []*genai.Part{
+			{Text: prompt},
+			{InlineData: &genai.Blob{Data: imageData, MIMEType: mimeType}},
+		},
+	}}
+
+	result, err := client.Models.GenerateContent(reqCtx, modelName, contents, config)
+	if err != nil {
+		return nil, fmt.Errorf("gemini_service: Gemini API failed: %w", err)
+	}
+	return result, nil
+}
+
+func getGeminiClient(ctx context.Context) (*genai.Client, error) {
+	cfg := config.GetConfig()
+	if cfg.GeminiAPIKey == "" {
+		return nil, fmt.Errorf("gemini_service: GEMINI_API_KEY is not configured")
+	}
+
+	geminiClientMu.Lock()
+	defer geminiClientMu.Unlock()
+	if geminiClient != nil && geminiClientKey == cfg.GeminiAPIKey {
+		return geminiClient, nil
+	}
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  cfg.GeminiAPIKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gemini_service: create Gemini client failed: %w", err)
+	}
+	geminiClient = client
+	geminiClientKey = cfg.GeminiAPIKey
+	return geminiClient, nil
+}
+
+func vehicleOCRSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"registration_date": {Type: genai.TypeString},
+			"plate_number":      {Type: genai.TypeString},
+			"province":          {Type: genai.TypeString},
+			"vehicle_brand":     {Type: genai.TypeString},
+			"chassis_number":    {Type: genai.TypeString},
+			"engine_number":     {Type: genai.TypeString},
+			"model_year":        {Type: genai.TypeInteger},
+			"color":             {Type: genai.TypeString},
+			"engine_cc":         {Type: genai.TypeInteger},
+			"car_weight":        {Type: genai.TypeInteger},
+		},
+		Required: []string{"registration_date", "plate_number", "province", "vehicle_brand", "chassis_number", "engine_number", "model_year", "color", "engine_cc", "car_weight"},
+		PropertyOrdering: []string{
+			"registration_date", "plate_number", "province", "vehicle_brand", "chassis_number",
+			"engine_number", "model_year", "color", "engine_cc", "car_weight",
+		},
+	}
+}
+
+func idCardOCRSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"id_number":     {Type: genai.TypeString},
+			"title":         {Type: genai.TypeString},
+			"first_name":    {Type: genai.TypeString},
+			"last_name":     {Type: genai.TypeString},
+			"date_of_birth": {Type: genai.TypeString},
+			"gender":        {Type: genai.TypeString},
+			"house_no":      {Type: genai.TypeString},
+			"moo":           {Type: genai.TypeString},
+			"soi":           {Type: genai.TypeString},
+			"road":          {Type: genai.TypeString},
+			"subdistrict":   {Type: genai.TypeString},
+			"district":      {Type: genai.TypeString},
+			"province":      {Type: genai.TypeString},
+			"zipcode":       {Type: genai.TypeString},
+			"issue_date":    {Type: genai.TypeString},
+			"expiry_date":   {Type: genai.TypeString},
+			"religion":      {Type: genai.TypeString},
+			"address":       {Type: genai.TypeString},
+		},
+		Required: []string{"id_number", "title", "first_name", "last_name", "date_of_birth", "gender", "house_no", "moo", "soi", "road", "subdistrict", "district", "province", "zipcode", "issue_date", "expiry_date", "religion", "address"},
+		PropertyOrdering: []string{
+			"id_number", "title", "first_name", "last_name", "date_of_birth", "gender",
+			"house_no", "moo", "soi", "road", "subdistrict", "district", "province",
+			"zipcode", "issue_date", "expiry_date", "religion", "address",
+		},
+	}
 }

@@ -443,12 +443,27 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "File upload failed"})
+		WriteAudit(c, "upload_insurance_file_failed", loan.RefCode, "reason=no_file")
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": "File upload failed",
+			"diagnostic": fiber.Map{
+				"code": "no_file",
+			},
+		})
 	}
 
 	src, contentType, err := validateInsuranceUpload(fileHeader, config.GetConfig().UploadMaxFileSizeBytes)
 	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		WriteAudit(c, "upload_insurance_file_failed", loan.RefCode, "reason=validation_error filename="+fileHeader.Filename+" error="+err.Error())
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+			"diagnostic": fiber.Map{
+				"code":         "validation_error",
+				"filename":     fileHeader.Filename,
+				"size":         fileHeader.Size,
+				"content_type": contentType,
+			},
+		})
 	}
 	if closer, ok := src.(io.Closer); ok {
 		defer closer.Close()
@@ -460,7 +475,14 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 	// Upload to R2
 	if err := putR2Object(filename, src, contentType); err != nil {
 		log.Printf("R2 Upload Error: %v", err)
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to upload to Cloud Storage"})
+		WriteAudit(c, "upload_insurance_file_failed", loan.RefCode, "reason=storage_error filename="+fileHeader.Filename)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to upload to Cloud Storage",
+			"diagnostic": fiber.Map{
+				"code":     "storage_error",
+				"filename": fileHeader.Filename,
+			},
+		})
 	}
 
 	// Update Database
@@ -482,9 +504,11 @@ func UploadInsuranceFile(c *fiber.Ctx) error {
 		log.Printf("loan file metadata create error for %s: %v", filename, err)
 	}
 
+	WriteAudit(c, "upload_insurance_file", loan.RefCode, "filename="+filename+" original="+fileHeader.Filename+" content_type="+contentType)
 	return c.JSON(fiber.Map{
-		"message":  "Upload success",
-		"filename": filename,
+		"message":      "Upload success",
+		"filename":     filename,
+		"content_type": contentType,
 		// Return API URL for viewing (via presigned redirect)
 		"url": "/file/" + filename,
 	})
@@ -575,6 +599,7 @@ func DeleteInsuranceFile(c *fiber.Ctx) error {
 		if err := deleteLoanFileMetadata(loan.ID, req.Filename); err != nil {
 			log.Printf("loan file metadata delete error for %s: %v", req.Filename, err)
 		}
+		WriteAudit(c, "delete_insurance_file", loan.RefCode, "filename="+req.Filename)
 		return c.JSON(fiber.Map{"message": "File deleted"})
 	}
 
